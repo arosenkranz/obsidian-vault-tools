@@ -1,0 +1,23 @@
+# Example config for the `ov` CLI.
+# Copy to ~/.config/ov/config and edit OV_VAULT_DIR for your machine.
+# `make install` does this for you on first run.
+
+# REQUIRED: absolute path to your Obsidian vault.
+OV_VAULT_DIR="$HOME/Documents/main-vault"
+
+# PARA folder names (relative to vault). Override only if you've renamed them.
+OV_INBOX="00-Inbox"
+OV_PROJECTS="01-Projects"
+OV_AREAS="02-Areas"
+OV_RESOURCES="03-Resources"
+OV_ARCHIVE="04-Archive"
+OV_META="99-Meta"
+
+# LLM command for `ov triage --llm`. Pipe-prompt-in, get-text-out.
+# Examples:
+#   OV_LLM_CMD="claude --print"
+#   OV_LLM_CMD="pi --print -nc -nt --mode json"   # pi with context/tool isolation + native JSON
+OV_LLM_CMD="claude --print"
+
+# Optional model override (passed as --model). Empty = use the LLM's default.
+OV_MODEL=""

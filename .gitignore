@@ -1,0 +1,22 @@
+# Defensive — config should live in ~/.config/ov/, never inside the repo.
+config
+*.config
+config.local
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Build artifacts
+dist/
+build/
