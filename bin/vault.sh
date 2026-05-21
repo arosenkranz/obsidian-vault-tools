@@ -64,7 +64,13 @@ COMMANDS:
     review              Weekly review summary
     stale [days]        Find notes not touched in N days (default: 90)
     mocs <subcommand>   Manage Maps of Content
+    publish [<file>]    Publish to docs server; opens picker if no file given
+    unpublish [<file>]  Remove file(s) from docs server; opens picker if no files given
     help                Show this help
+
+PUBLISH OPTIONS:
+    --llm               Convert a .md note to HTML via LLM before publishing
+    --desc "<text>"     Design guidance for --llm (default: clean, modern design)
 
 CAPTURE OPTIONS:
     --title <str>       Explicit title (otherwise auto-derived from first line)
@@ -630,6 +636,166 @@ moc_add() {
     echo -e "${GREEN}✓ Added '$note_name' to $(basename "$selected_moc")${NC}"
 }
 
+# publish_doc: optionally convert a .md note to HTML via LLM, then rsync to docs host
+publish_doc() {
+    local file=""
+    local use_llm=0
+    local llm_desc=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --llm)       use_llm=1; shift ;;
+            --desc)      llm_desc="$2"; shift 2 ;;
+            -*)          echo -e "${RED}Unknown flag: $1${NC}" >&2; return 1 ;;
+            *)           file="$1"; shift ;;
+        esac
+    done
+
+    local host="${OV_DOCS_HOST:-}"
+    local remote_path="${OV_DOCS_PATH:-/var/www/docs}"
+    local url_base="${OV_DOCS_URL:-}"
+
+    if [ -z "$host" ]; then
+        echo -e "${RED}OV_DOCS_HOST not set.${NC}" >&2
+        echo "    Add OV_DOCS_HOST=your-server to ~/.config/ov/config" >&2
+        return 1
+    fi
+
+    # Interactive picker when no file given
+    if [ -z "$file" ]; then
+        if ! command -v fzf &>/dev/null; then
+            echo -e "${RED}fzf not found — pass a file path or install fzf.${NC}" >&2
+            return 1
+        fi
+        file=$(find "$VAULT_DIR" -name "*.md" -not -path "*/.obsidian/*" \
+               | sort \
+               | fzf --prompt="Publish note > " \
+                     --preview="head -60 {}" \
+                     --preview-window=right:50% \
+                     --height=70%)
+        [ -z "$file" ] && return 0  # cancelled
+    fi
+
+    if [ ! -f "$file" ]; then
+        echo -e "${RED}File not found: $file${NC}" >&2
+        return 1
+    fi
+
+    local ext="${file##*.}"
+    local publish_file="$file"
+
+    # .md without --llm: bail with a hint
+    if [ "$ext" = "md" ] && [ "$use_llm" -eq 0 ]; then
+        echo -e "${YELLOW}⚠  That's a markdown file.${NC}"
+        echo    "   Use --llm to convert it to HTML first:"
+        echo    "   ov publish \"$file\" --llm"
+        return 1
+    fi
+
+    # --llm: convert .md → styled HTML
+    if [ "$use_llm" -eq 1 ]; then
+        if [ "$ext" != "md" ]; then
+            echo -e "${YELLOW}⚠  --llm ignored: file is already .${ext}, publishing as-is.${NC}"
+        else
+            local llm_cmd="${OV_LLM_CMD:-claude --print}"
+            local guidance="${llm_desc:-clean, modern design with good typography and readable line lengths}"
+            local slug
+            slug=$(basename "$file" .md | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-')
+            local out_dir="$VAULT_DIR/Published"
+            mkdir -p "$out_dir"
+            local out_file="$out_dir/${slug}.html"
+
+            echo -e "${CYAN}🤖 Converting with LLM...${NC}"
+            {
+                echo "Convert this Obsidian markdown note into a complete, self-contained HTML file."
+                echo "Design guidance: ${guidance}"
+                echo "Rules: single file, inline all CSS and JS, no external dependencies."
+                echo "Return ONLY the HTML — no markdown, no code fences, no explanation."
+                echo ""
+                echo "---"
+                cat "$file"
+            } | eval "$llm_cmd" > "$out_file"
+
+            echo -e "${GREEN}✓ HTML saved: ${out_file}${NC}"
+            publish_file="$out_file"
+        fi
+    fi
+
+    local filename
+    filename="$(basename "$publish_file")"
+
+    echo -e "${CYAN}📤 Publishing ${filename}...${NC}"
+    rsync -avz "$publish_file" "${host}:${remote_path}/"
+
+    if [ -n "$url_base" ]; then
+        echo -e "\n${GREEN}✓ Live at: ${url_base}/${filename}${NC}"
+    else
+        echo -e "\n${GREEN}✓ Published to ${host}:${remote_path}/${filename}${NC}"
+    fi
+}
+
+# unpublish_doc: remove one or more files from the docs server
+unpublish_doc() {
+    local host="${OV_DOCS_HOST:-}"
+    local remote_path="${OV_DOCS_PATH:-/var/www/docs}"
+    local url_base="${OV_DOCS_URL:-}"
+
+    if [ -z "$host" ]; then
+        echo -e "${RED}OV_DOCS_HOST not set.${NC}" >&2
+        return 1
+    fi
+
+    # Direct removal if filenames passed as args
+    if [ $# -gt 0 ]; then
+        for f in "$@"; do
+            local base
+            base=$(basename "$f")
+            echo -e "${CYAN}🗑  Removing ${base}...${NC}"
+            ssh "$host" "rm -f '${remote_path}/${base}'"
+            echo -e "${GREEN}✓ Removed${NC}"
+        done
+        return 0
+    fi
+
+    # Interactive multi-select picker
+    if ! command -v fzf &>/dev/null; then
+        echo -e "${RED}fzf not found — pass filename(s) directly or install fzf.${NC}" >&2
+        return 1
+    fi
+
+    echo -e "${CYAN}Fetching published files...${NC}"
+    local remote_files
+    remote_files=$(ssh "$host" "ls -1 '${remote_path}/' 2>/dev/null")
+
+    if [ -z "$remote_files" ]; then
+        echo -e "${YELLOW}No files on docs server.${NC}"
+        return 0
+    fi
+
+    local selected
+    selected=$(echo "$remote_files" | fzf \
+        --multi \
+        --prompt="Unpublish > " \
+        --header="TAB=select multiple  ENTER=confirm  ESC=cancel" \
+        --preview="echo '${url_base}/{}'" \
+        --preview-window=bottom:3 \
+        --height=50%)
+
+    [ -z "$selected" ] && { echo "Cancelled."; return 0; }
+
+    echo -e "${YELLOW}Will remove:${NC}"
+    echo "$selected" | while read -r f; do echo "  • $f"; done
+    echo -n "Confirm? [y/N] "
+    read -r confirm
+    [ "$confirm" != "y" ] && [ "$confirm" != "Y" ] && { echo "Cancelled."; return 0; }
+
+    echo "$selected" | while read -r f; do
+        echo -e "${CYAN}🗑  Removing ${f}...${NC}"
+        ssh "$host" "rm -f '${remote_path}/${f}'"
+        echo -e "${GREEN}✓ Removed${NC}"
+    done
+}
+
 # Main command handler
 case "${1:-help}" in
     inbox)
@@ -681,6 +847,14 @@ case "${1:-help}" in
                 exit 1
                 ;;
         esac
+        ;;
+    publish)
+        shift
+        publish_doc "$@"
+        ;;
+    unpublish)
+        shift
+        unpublish_doc "$@"
         ;;
     help|--help|-h)
         show_help
