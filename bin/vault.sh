@@ -705,7 +705,8 @@ publish_doc() {
             local out_file="$out_dir/${slug}.html"
 
             echo -e "${CYAN}🤖 Converting with LLM...${NC}"
-            {
+            local raw_output
+            raw_output=$( {
                 echo "Convert this Obsidian markdown note into a complete, self-contained HTML file."
                 echo "Design guidance: ${guidance}"
                 echo "Rules: single file, inline all CSS and JS, no external dependencies."
@@ -713,7 +714,21 @@ publish_doc() {
                 echo ""
                 echo "---"
                 cat "$file"
-            } | eval "$llm_cmd" > "$out_file"
+            } | eval "$llm_cmd" )
+
+            # Extract content between <html> and </html> tags, if present
+            # This strips any LLM metadata or commentary before/after the HTML
+            local clean_html
+            if echo "$raw_output" | grep -q '<html[^>]*>'; then
+                # Extract HTML block from <html> to </html>
+                clean_html=$(echo "$raw_output" | sed -n '/<html[^>]*>/,/<\/html>/p')
+            else
+                # No <html> tag found, use as-is
+                clean_html="$raw_output"
+            fi
+
+            # Write the output (avoid adding extra newline)
+            printf '%s\n' "$clean_html" > "$out_file"
 
             echo -e "${GREEN}✓ HTML saved: ${out_file}${NC}"
             publish_file="$out_file"
