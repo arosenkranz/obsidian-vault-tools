@@ -663,16 +663,15 @@ publish_doc() {
 
     # Interactive picker when no file given
     if [ -z "$file" ]; then
-        if ! command -v fzf &>/dev/null; then
-            echo -e "${RED}fzf not found — pass a file path or install fzf.${NC}" >&2
+        if ! command -v gum &>/dev/null; then
+            echo -e "${RED}gum not found — pass a file path or install gum.${NC}" >&2
             return 1
         fi
         file=$(find "$VAULT_DIR" -name "*.md" -not -path "*/.obsidian/*" \
                | sort \
-               | fzf --prompt="Publish note > " \
-                     --preview="head -60 {}" \
-                     --preview-window=right:50% \
-                     --height=70%)
+               | gum filter \
+                   --prompt="Publish note > " \
+                   --height 20)
         [ -z "$file" ] && return 0  # cancelled
     fi
 
@@ -706,7 +705,8 @@ publish_doc() {
             local out_file="$out_dir/${slug}.html"
 
             echo -e "${CYAN}🤖 Converting with LLM...${NC}"
-            {
+            local raw_output
+            raw_output=$( {
                 echo "Convert this Obsidian markdown note into a complete, self-contained HTML file."
                 echo "Design guidance: ${guidance}"
                 echo "Rules: single file, inline all CSS and JS, no external dependencies."
@@ -714,7 +714,21 @@ publish_doc() {
                 echo ""
                 echo "---"
                 cat "$file"
-            } | eval "$llm_cmd" > "$out_file"
+            } | eval "$llm_cmd" )
+
+            # Extract content between <html> and </html> tags, if present
+            # This strips any LLM metadata or commentary before/after the HTML
+            local clean_html
+            if echo "$raw_output" | grep -q '<html[^>]*>'; then
+                # Extract HTML block from <html> to </html>
+                clean_html=$(echo "$raw_output" | sed -n '/<html[^>]*>/,/<\/html>/p')
+            else
+                # No <html> tag found, use as-is
+                clean_html="$raw_output"
+            fi
+
+            # Write the output (avoid adding extra newline)
+            printf '%s\n' "$clean_html" > "$out_file"
 
             echo -e "${GREEN}✓ HTML saved: ${out_file}${NC}"
             publish_file="$out_file"
@@ -758,8 +772,8 @@ unpublish_doc() {
     fi
 
     # Interactive multi-select picker
-    if ! command -v fzf &>/dev/null; then
-        echo -e "${RED}fzf not found — pass filename(s) directly or install fzf.${NC}" >&2
+    if ! command -v gum &>/dev/null; then
+        echo -e "${RED}gum not found — pass filename(s) directly or install gum.${NC}" >&2
         return 1
     fi
 
@@ -773,21 +787,17 @@ unpublish_doc() {
     fi
 
     local selected
-    selected=$(echo "$remote_files" | fzf \
-        --multi \
+    selected=$(echo "$remote_files" | gum filter --no-limit \
         --prompt="Unpublish > " \
-        --header="TAB=select multiple  ENTER=confirm  ESC=cancel" \
-        --preview="echo '${url_base}/{}'" \
-        --preview-window=bottom:3 \
-        --height=50%)
+        --height 15)
 
-    [ -z "$selected" ] && { echo "Cancelled."; return 0; }
+    [ -z "$selected" ] && { echo -e "${YELLOW}Cancelled.${NC}"; return 0; }
 
     echo -e "${YELLOW}Will remove:${NC}"
     echo "$selected" | while read -r f; do echo "  • $f"; done
     echo -n "Confirm? [y/N] "
     read -r confirm
-    [ "$confirm" != "y" ] && [ "$confirm" != "Y" ] && { echo "Cancelled."; return 0; }
+    [ "$confirm" != "y" ] && [ "$confirm" != "Y" ] && { echo -e "${YELLOW}Cancelled.${NC}"; return 0; }
 
     echo "$selected" | while read -r f; do
         echo -e "${CYAN}🗑  Removing ${f}...${NC}"
