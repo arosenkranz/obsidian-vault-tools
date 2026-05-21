@@ -671,7 +671,7 @@ publish_doc() {
                | sort \
                | gum filter \
                    --prompt="Publish note > " \
-                   --height=70%)
+                   --height 20)
         [ -z "$file" ] && return 0  # cancelled
     fi
 
@@ -774,7 +774,7 @@ unpublish_doc() {
     local selected
     selected=$(echo "$remote_files" | gum filter --no-limit \
         --prompt="Unpublish > " \
-        --height=50%)
+        --height 15)
 
     [ -z "$selected" ] && { echo -e "${YELLOW}Cancelled.${NC}"; return 0; }
 

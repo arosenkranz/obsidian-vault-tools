@@ -34,6 +34,15 @@ ov review                                    # weekly review summary
 ov stale 60                                  # find notes untouched for 60+ days
 ```
 
+## Publish to docs server
+
+```bash
+ov publish <file>                            # publish a file to docs server
+ov publish <file> --llm                      # convert .md to HTML via LLM, then publish
+ov publish                                   # interactively select file with gum
+ov unpublish                                 # interactively select files to remove with gum
+```
+
 `ov help` for full usage.
 
 ## Architecture
@@ -50,3 +59,4 @@ Per-machine config lives at `~/.config/ov/config` and points at your vault. See 
 - macOS or Linux (bash, Python 3.9+)
 - An LLM CLI on PATH for `ov triage --llm` — defaults to `claude --print`, swappable to `pi --print -nc -nt --mode json` via config.
 - Optional: [Dataview](https://github.com/blacksmithgu/obsidian-dataview) plugin in Obsidian for the dashboard pages.
+- Optional: [gum](https://github.com/charmbracelet/gum) for interactive file pickers in `ov publish` and `ov unpublish` commands.
