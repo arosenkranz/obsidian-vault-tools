@@ -77,6 +77,7 @@ CAPTURE OPTIONS:
     --title <str>       Explicit title (otherwise auto-derived from first line)
     --tags <a,b,c>      Comma-separated tags (optional)
     --source <name>     Source label: cli | web | llm (default: cli)
+    --moc <name>        Link note to a MOC by name (exact match, non-interactive)
 
 MOC SUBCOMMANDS:
     mocs list           List all MOCs with descriptions
@@ -157,10 +158,201 @@ slugify_title() {
     printf '%s' "$raw"
 }
 
+# Helper: Count wikilinks in a MOC file to show item count
+count_moc_items() {
+    local moc_file="$1"
+    if [ -f "$moc_file" ]; then
+        # Count [[wikilinks]] in the file (rough estimate)
+        grep -c '\[\[' "$moc_file" 2>/dev/null | tr -d ' ' || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+# Helper: Find MOC by exact name match
+find_moc_by_name() {
+    local target_name="$1"
+    
+    # Try exact filename match (user might pass "MOC Music" or just "Music")
+    local moc_pattern="MOC ${target_name}.md"
+    
+    # Try full pattern first
+    if [ -f "$RESOURCES_DIR/$moc_pattern" ]; then
+        echo "$RESOURCES_DIR/$moc_pattern"
+        return 0
+    fi
+    
+    # Try with just the name (without "MOC " prefix)
+    if [[ "$target_name" == MOC* ]]; then
+        local name_only="${target_name#MOC }"
+        moc_pattern="MOC ${name_only}.md"
+    else
+        moc_pattern="MOC ${target_name}.md"
+    fi
+    
+    # Search in Resources dir
+    if [ -f "$RESOURCES_DIR/$moc_pattern" ]; then
+        echo "$RESOURCES_DIR/$moc_pattern"
+        return 0
+    fi
+    
+    # Search entire vault
+    local moc_file
+    moc_file=$(find "$VAULT_DIR" -name "$moc_pattern" -type f 2>/dev/null | head -1)
+    if [ -n "$moc_file" ]; then
+        echo "$moc_file"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Helper: Get all MOC files with item counts
+list_all_mocs() {
+    find "$VAULT_DIR" -name "MOC*.md" -type f 2>/dev/null | while read -r moc; do
+        local name=$(basename "$moc" .md)
+        local count=$(count_moc_items "$moc")
+        echo "$count|$name|$moc"
+    done | sort -t'|' -k2
+}
+
+# Helper: Interactive MOC picker with fzf
+select_moc_interactive() {
+    local mocs
+    mocs=$(list_all_mocs)
+    
+    if [ -z "$mocs" ]; then
+        echo -e "${YELLOW}⚠ No MOCs found in vault.${NC}"
+        echo -e "   Create one with: ov mocs new <name>"
+        echo ""
+        return 1  # No MOCs available, but don't fail capture
+    fi
+    
+    # Format for fzf: "count|name"
+    local fzf_input
+    fzf_input=$(echo "$mocs" | awk -F'|' '{printf "%3d | %s\n", $1, $2}')
+    
+    echo ""
+    echo -e "${CYAN}📁${NC} Choose MOC to link to (Enter to skip, q to cancel):"
+    echo ""
+    echo "$fzf_input"
+    echo ""
+    
+    # Use fzf if available, otherwise simple numbered list
+    local selected
+    if command -v fzf &> /dev/null; then
+        selected=$(echo "$fzf_input" | fzf --preview='echo "{}" | cut -d"|" -f2' --preview-window=down:3:wrap --bind "ctrl-c:abort" --bind "enter:abort" --height 50%)
+        
+        if [ -z "$selected" ]; then
+            # User pressed Enter (no selection) or cancelled
+            return 0
+        fi
+        
+        # Extract MOC name from selection
+        local moc_name
+        moc_name=$(echo "$selected" | cut -d'|' -f2 | sed 's/^ *//')
+        find_moc_by_name "$moc_name"
+    else
+        # Fallback: simple numbered list
+        local i=0
+        local moc_array=()
+        while IFS='|' read -r count name path; do
+            i=$((i+1))
+            moc_array+=("$i|$name|$path")
+            echo "  [$i] $name ($count items)"
+        done <<< "$mocs"
+        
+        local total=${#moc_array[@]}
+        echo ""
+        echo -n "  Type number (1-$total), Enter to skip, or q to cancel: "
+        
+        read -r choice
+        
+        case "$choice" in
+            q|Q|"")
+                return 0  # Cancel or skip
+                ;;
+            [0-9]*)
+                if [ "$choice" -ge 1 ] && [ "$choice" -le "$total" ]; then
+                    local selected_item="${moc_array[$((choice-1))]}"
+                    echo "$selected_item" | cut -d'|' -f3
+                else
+                    echo -e "${RED}Invalid number${NC}"
+                    select_moc_interactive  # Recurse
+                fi
+                ;;
+            *)
+                echo -e "${RED}Invalid input${NC}"
+                select_moc_interactive  # Recurse
+                ;;
+        esac
+    fi
+}
+
+# Helper: Update MOC with new entry
+update_moc() {
+    local moc_file="$1"
+    local note_title="$2"
+    local snippet="$3"
+    
+    if [ ! -f "$moc_file" ]; then
+        echo -e "${RED}Error: MOC not found: $moc_file${NC}"
+        return 1
+    fi
+    
+    # Determine best section by scanning MOC headings
+    local target_section=""
+    local section_heading=""
+    
+    # Check for preferred sections in order
+    if grep -q "^## 📰 Articles & Reading" "$moc_file"; then
+        target_section="## 📰 Articles & Reading"
+    elif grep -q "^## 📚 Learning Resources" "$moc_file"; then
+        target_section="## 📚 Learning Resources"
+    elif grep -q "^## 🔗 Resources" "$moc_file"; then
+        target_section="## 🔗 Resources"
+    elif grep -q "^## 🏆 Album Lists" "$moc_file"; then
+        target_section="## 🏆 Album Lists"
+    else
+        # Create new section if none found
+        target_section="## 🔗 Recent Additions"
+        section_heading="$target_section"
+    fi
+    
+    # Add the entry
+    local entry="- [[${note_title}]] — ${snippet}"
+    
+    if [ -n "$section_heading" ]; then
+        # Append new section with entry
+        echo "" >> "$moc_file"
+        echo "$section_heading" >> "$moc_file"
+        echo "$entry" >> "$moc_file"
+    else
+        # Find the section and append after it
+        local in_section=false
+        local temp_file=$(mktemp)
+        local appended=false
+        
+        while IFS= read -r line; do
+            echo "$line" >> "$temp_file"
+            if [ "$appended" = false ] && [ "$line" = "$target_section" ]; then
+                echo "" >> "$temp_file"
+                echo "$entry" >> "$temp_file"
+                appended=true
+            fi
+        done < "$moc_file"
+        
+        mv "$temp_file" "$moc_file"
+    fi
+    
+    return 0
+}
+
 capture_note() {
     local title=""
     local tags=""
     local source="cli"
+    local moc_flag=""
     local body_arg=""
 
     # Parse flags
@@ -178,6 +370,10 @@ capture_note() {
                 source="$2"
                 shift 2
                 ;;
+            --moc)
+                moc_flag="$2"
+                shift 2
+                ;;
             --help|-h)
                 cat <<EOF
 ov capture - quick-dump a note into 00-Inbox
@@ -185,6 +381,7 @@ ov capture - quick-dump a note into 00-Inbox
 USAGE:
     ov capture [text]                       Body from positional arg
     ov capture                              Body from stdin (when piped)
+    ov capture --moc "MOC Name" [text]      Capture and link to MOC
     echo "..." | ov capture --title Foo
     ov capture --title "Foo" --tags "a,b" --source llm <<EOF
     body...
@@ -194,6 +391,7 @@ OPTIONS:
     --title <str>     Explicit title (default: derived from first line)
     --tags <a,b,c>    Comma-separated tags
     --source <name>   cli | web | llm (default: cli)
+    --moc <name>      Link note to a MOC by name (exact match, non-interactive)
 EOF
                 return 0
                 ;;
@@ -240,6 +438,33 @@ EOF
     fi
     title="$(slugify_title "$title")"
 
+    # Select MOC if not specified via flag
+    local selected_moc=""
+    if [ -n "$moc_flag" ]; then
+        # Non-interactive mode: use --moc flag value
+        selected_moc=$(find_moc_by_name "$moc_flag")
+        if [ -z "$selected_moc" ]; then
+            echo -e "${RED}Error: MOC not found: $moc_flag${NC}"
+            return 1
+        fi
+        echo -e "${CYAN}🔗 Linking to MOC:${NC} $moc_flag"
+    else
+        # Interactive mode: show picker
+        selected_moc=$(select_moc_interactive)
+        local picker_status=$?
+        if [ $picker_status -ne 0 ] && [ -z "$selected_moc" ]; then
+            # No MOCs available, but don't fail capture
+            selected_moc=""
+        fi
+    fi
+
+    # Get snippet for MOC entry (first line of body, truncated)
+    local snippet
+    snippet=$(printf '%s\n' "$body" | head -1 | cut -c1-60)
+    if [ ${#snippet} -lt $(printf '%s' "$body" | head -1 | wc -c) ]; then
+        snippet="${snippet}..."
+    fi
+
     # Build filename: "YYYY-MM-DD HHMM <Title>.md"
     local stamp
     stamp="$(date +'%Y-%m-%d %H%M')"
@@ -263,12 +488,19 @@ EOF
         echo "---"
         echo "type: inbox"
         echo "created: $created"
+        echo "modified: $created"
         echo "source: $source"
         if [ -n "$tags" ]; then
             # Convert "a,b,c" to YAML list "[a, b, c]"
             local yaml_tags
             yaml_tags="$(printf '%s' "$tags" | tr ',' '\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | awk 'NF' | paste -sd, - | sed 's/,/, /g')"
             echo "tags: [$yaml_tags]"
+        fi
+        if [ -n "$selected_moc" ]; then
+            # Extract MOC name for frontmatter reference
+            local moc_name
+            moc_name=$(basename "$selected_moc" .md)
+            echo "moc: [[${moc_name}]]"
         fi
         echo "---"
         echo
@@ -287,9 +519,28 @@ EOF
             }
             skipped { print }
         '
+        # Add footer if MOC selected
+        if [ -n "$selected_moc" ]; then
+            local moc_name
+            moc_name=$(basename "$selected_moc" .md)
+            echo ""
+            echo "---"
+            echo "*Added to [[${moc_name}]] on $created*"
+        fi
     } > "$target"
 
     echo -e "${GREEN}✓ Captured:${NC} ${target#$VAULT_DIR/}"
+    
+    # Update MOC if selected
+    if [ -n "$selected_moc" ]; then
+        local moc_name
+        moc_name=$(basename "$selected_moc" .md)
+        if update_moc "$selected_moc" "$title" "$snippet"; then
+            echo -e "${GREEN}✓ Added to [[${moc_name}]]${NC}"
+        else
+            echo -e "${RED}✗ Failed to update MOC${NC}"
+        fi
+    fi
 }
 
 inbox_list() {
