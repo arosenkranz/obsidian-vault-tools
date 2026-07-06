@@ -66,6 +66,7 @@ COMMANDS:
     mocs <subcommand>   Manage Maps of Content
     publish [<file>]    Publish to docs server; opens picker if no file given
     unpublish [<file>]  Remove file(s) from docs server; opens picker if no files given
+    render [--all]      Regenerate HTML guide(s) from Markdown source
     help                Show this help
 
 PUBLISH OPTIONS:
@@ -833,6 +834,10 @@ case "${1:-help}" in
         ;;
     stale)
         find_stale "$2"
+        ;;
+    render)
+        shift
+        python3 "$SCRIPT_DIR/render_html.py" --vault "$VAULT_DIR" "$@"
         ;;
     mocs)
         case "${2:-list}" in
