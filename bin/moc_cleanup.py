@@ -162,6 +162,20 @@ def render_diff(old: str, new: str, filename: str) -> str:
     return "\n".join(out)
 
 
+def parse_llm_response(raw: str) -> dict:
+    """Parse and validate the LLM's JSON response. Raises ValueError if the
+    required 'new_content' field is missing or not a string."""
+    data = extract_json(raw)
+    if "new_content" not in data or not isinstance(data["new_content"], str):
+        raise ValueError(
+            "LLM response missing required string field 'new_content':\n"
+            f"{raw}"
+        )
+    data.setdefault("duplicates_flagged", [])
+    data.setdefault("summary", "")
+    return data
+
+
 def find_moc_files(vault: Path, name: str | None) -> list[Path]:
     """Resolve `name` to a single MOC file, or list all MOC*.md files in the
     vault if name is None (the --all case). Matches vault.sh's

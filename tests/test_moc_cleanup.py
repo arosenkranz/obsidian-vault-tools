@@ -119,3 +119,28 @@ def test_render_diff_empty_when_identical():
     same = "line1\nline2\n"
     out = render_diff(same, same, filename="MOC Test.md")
     assert out.strip() == "" or "no changes" in out.lower()
+
+
+from moc_cleanup import parse_llm_response
+
+
+def test_parse_llm_response_extracts_new_content():
+    raw = '{"new_content": "hello", "duplicates_flagged": [], "summary": "ok"}'
+    result = parse_llm_response(raw)
+    assert result["new_content"] == "hello"
+    assert result["duplicates_flagged"] == []
+
+
+def test_parse_llm_response_handles_fenced_json():
+    raw = '```json\n{"new_content": "hi", "duplicates_flagged": [], "summary": "x"}\n```'
+    result = parse_llm_response(raw)
+    assert result["new_content"] == "hi"
+
+
+def test_parse_llm_response_rejects_missing_new_content():
+    raw = '{"duplicates_flagged": [], "summary": "x"}'
+    try:
+        parse_llm_response(raw)
+        assert False, "expected ValueError"
+    except ValueError as e:
+        assert "new_content" in str(e)
