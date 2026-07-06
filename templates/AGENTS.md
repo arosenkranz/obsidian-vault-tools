@@ -167,6 +167,7 @@ Topical tags (e.g. `#terraform`, `#datadog`, `#music`) are fine when they aid se
 - MOCs (Maps of Content) live in `03-Resources/` prefixed `MOC` (e.g. `MOC Music.md`, `MOC Programming & DevOps.md`). They are hand-curated indexes, not auto-generated.
 - When filing a note, look for an obvious MOC to link from. Propose the link in your triage output but **do not** edit MOCs without approval.
 - Don't create new MOCs as part of a triage. That's a separate, deliberate action via `ov mocs new`.
+- The one sanctioned exception to "don't edit MOCs": `ov mocs cleanup <name>` (or `--all`) runs an LLM reorganization pass that shows a full diff and requires explicit `y` confirmation before writing anything. It only reorganizes/re-titles existing entries — it cannot delete links or touch frontmatter (enforced by a structural check, not just prompt instructions). This is always a deliberate command the human runs themselves; never invoke it as part of an autonomous triage.
 
 ---
 
