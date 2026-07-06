@@ -135,6 +135,33 @@ def build_prompt(moc_text: str, moc_name: str) -> str:
     return PROMPT_TEMPLATE.format(moc_name=moc_name, moc_content=moc_text)
 
 
+def render_diff(old: str, new: str, filename: str) -> str:
+    """Unified diff, colorized like `git diff` (+green/-red), or a plain
+    'no changes' message if the proposal is identical to the original."""
+    diff_lines = list(difflib.unified_diff(
+        old.splitlines(keepends=True),
+        new.splitlines(keepends=True),
+        fromfile=f"{filename} (current)",
+        tofile=f"{filename} (proposed)",
+    ))
+    if not diff_lines:
+        return color("(no changes proposed)", C_DIM)
+
+    out = []
+    for line in diff_lines:
+        if line.startswith("+++") or line.startswith("---"):
+            out.append(color(line.rstrip("\n"), C_BOLD))
+        elif line.startswith("+"):
+            out.append(color(line.rstrip("\n"), C_GREEN))
+        elif line.startswith("-"):
+            out.append(color(line.rstrip("\n"), C_RED))
+        elif line.startswith("@@"):
+            out.append(color(line.rstrip("\n"), C_CYAN))
+        else:
+            out.append(line.rstrip("\n"))
+    return "\n".join(out)
+
+
 def find_moc_files(vault: Path, name: str | None) -> list[Path]:
     """Resolve `name` to a single MOC file, or list all MOC*.md files in the
     vault if name is None (the --all case). Matches vault.sh's

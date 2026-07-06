@@ -102,3 +102,20 @@ def test_validate_rejects_dropped_url():
         assert False, "expected ValidationError"
     except ValidationError as e:
         assert "url" in str(e).lower() or "link" in str(e).lower()
+
+
+from moc_cleanup import render_diff
+
+
+def test_render_diff_shows_added_and_removed_lines():
+    old = "line1\nline2\nline3\n"
+    new = "line1\nline2-changed\nline3\n"
+    out = render_diff(old, new, filename="MOC Test.md")
+    assert "-line2\n" in out or "-line2" in out
+    assert "+line2-changed" in out
+
+
+def test_render_diff_empty_when_identical():
+    same = "line1\nline2\n"
+    out = render_diff(same, same, filename="MOC Test.md")
+    assert out.strip() == "" or "no changes" in out.lower()
