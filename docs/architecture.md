@@ -27,13 +27,13 @@ For a vault that's already established, the live vault wins. The templates here 
 
 ## Path resolution
 
-Both `bin/vault.sh` and `bin/triage_llm.py`:
+`bin/vault.sh`, `bin/triage_llm.py`, and `bin/moc_cleanup.py`:
 
 1. Read `~/.config/ov/config` (or `$OV_CONFIG`).
 2. Apply env-var overrides.
 3. Apply CLI-flag overrides.
 
-Neither script has hardcoded paths. The repo can live anywhere; the vault can live anywhere; PARA folders can be renamed.
+None of the scripts have hardcoded paths. The repo can live anywhere; the vault can live anywhere; PARA folders can be renamed.
 
 ## LLM-call abstraction
 
@@ -42,6 +42,14 @@ Neither script has hardcoded paths. The repo can live anywhere; the vault can li
 - prompt arrives on stdin
 - response (a single JSON object matching the AGENTS.md §7 schema) on stdout
 - non-zero exit code = failure
+
+`bin/moc_cleanup.py` (`ov mocs cleanup`) reuses the same `load_config`/
+`call_llm`/`extract_json` plumbing from `triage_llm.py` rather than
+duplicating it, so both tools stay consistent as `OV_LLM_CMD` evolves. Its
+response schema is different (`new_content`/`duplicates_flagged`/`summary`,
+see its own prompt in `bin/moc_cleanup.py`), and unlike triage it is never
+invoked autonomously — every write requires an explicit diff + `y`
+confirmation from the human running the command.
 
 This is met by both `claude --print` and `pi --print -nc -nt --mode json`. Other LLM CLIs that accept stdin and return text on stdout will work too.
 
@@ -67,4 +75,4 @@ Currently private. Before flipping public, scrub:
 4. Add a CONTRIBUTING.md if you want contributions.
 5. Mention LLM CLI requirements clearly in README.
 
-`bin/vault.sh` and `bin/triage_llm.py` are already generic — they have no personal information.
+`bin/vault.sh`, `bin/triage_llm.py`, and `bin/moc_cleanup.py` are already generic — they have no personal information.

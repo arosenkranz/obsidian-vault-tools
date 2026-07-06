@@ -8,6 +8,7 @@ A small CLI (`ov`) for managing a PARA-organized Obsidian vault, plus an LLM-ass
 |---|---|
 | `bin/vault.sh` | The `ov` CLI: inbox, capture, triage, new, review, stale, mocs |
 | `bin/triage_llm.py` | LLM-assisted inbox triage (`ov triage --llm`) |
+| `bin/moc_cleanup.py` | LLM-assisted MOC reorganizer (`ov mocs cleanup <name>` / `--all`) |
 | `templates/` | Canonical AGENTS.md and `99-Meta/` templates for fresh vaults |
 | `examples/ov.config.example` | Example per-machine config |
 | `docs/` | Install guide, config reference, architecture notes |
