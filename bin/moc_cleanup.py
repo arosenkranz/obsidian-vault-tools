@@ -47,13 +47,35 @@ def _frontmatter_block(text: str) -> str | None:
     return m.group(0) if m else None
 
 
+def _bare_wikilinks(text: str) -> set[str]:
+    """Wikilink targets from lines that do NOT also contain a URL.
+
+    A wikilink sharing a line with a URL is treated as "anchored" — its
+    display title may be freely corrected (that's the whole point of the
+    garbled-title-fix feature) because the URL is the thing that actually
+    identifies the entry. A bare wikilink with no URL on its line (e.g.
+    "- [[Neovim]] — my editor setup", linking to another vault note) has no
+    other anchor, so its exact text must survive untouched — renaming it
+    would silently break a real Obsidian link.
+    """
+    bare = set()
+    for line in text.splitlines():
+        if URL_RE.search(line):
+            continue
+        bare.update(WIKILINK_RE.findall(line))
+    return bare
+
+
 def validate_proposal(original: str, proposed: str) -> None:
     """Structural safety net, independent of prompt compliance. Raises
     ValidationError on any violation; returns None (silently) if the
     proposal is safe to show as a diff for human approval.
 
     This does NOT guarantee the reorganization is *good* — only that it
-    didn't lose frontmatter, wikilinks, or URLs present in the original.
+    didn't lose frontmatter, URLs, or bare (URL-less) wikilinks present in
+    the original. Wikilinks that share a line with a URL may be retitled
+    freely — the URL is checked instead, since retitling garbled entries is
+    an explicitly allowed operation.
     """
     orig_fm = _frontmatter_block(original)
     new_fm = _frontmatter_block(proposed)
@@ -62,13 +84,14 @@ def validate_proposal(original: str, proposed: str) -> None:
             "proposal changes the frontmatter block, which is forbidden"
         )
 
-    orig_links = set(WIKILINK_RE.findall(original))
-    new_links = set(WIKILINK_RE.findall(proposed))
-    dropped_links = orig_links - new_links
-    if dropped_links:
+    orig_bare_links = _bare_wikilinks(original)
+    new_bare_links = _bare_wikilinks(proposed)
+    dropped_bare_links = orig_bare_links - new_bare_links
+    if dropped_bare_links:
         raise ValidationError(
-            f"proposal drops {len(dropped_links)} wikilink(s) present in the "
-            f"original: {', '.join(sorted(dropped_links))}"
+            f"proposal drops or renames {len(dropped_bare_links)} bare "
+            f"wikilink(s) (no URL to anchor them) present in the original: "
+            f"{', '.join(sorted(dropped_bare_links))}"
         )
 
     orig_urls = set(URL_RE.findall(original))
@@ -223,7 +246,79 @@ def main() -> int:
         print(color(f"error: no MOC found matching '{args.name}'", C_RED), file=sys.stderr)
         return 2
 
+    llm_cmd = args.llm_cmd or cfg.get("OV_LLM_CMD") or "claude --print"
+    model = args.model or cfg.get("OV_MODEL") or None
+
     print(color(f"🧹 MOC cleanup — {len(targets)} file(s)", C_CYAN + C_BOLD))
+
+    counts = {"applied": 0, "skipped": 0, "unchanged": 0, "rejected": 0, "errored": 0}
+
+    for moc_path in targets:
+        print()
+        print(color("─" * 72, C_DIM))
+        print(color(f"📄 {moc_path.name}", C_BOLD))
+        print(color("─" * 72, C_DIM))
+
+        try:
+            original = moc_path.read_text()
+        except Exception as e:
+            print(color(f"  error reading file: {e}", C_RED))
+            counts["errored"] += 1
+            continue
+
+        prompt = build_prompt(original, moc_name=moc_path.stem)
+        print(color("  thinking…", C_DIM))
+        try:
+            raw = call_llm(prompt, llm_cmd=llm_cmd, model=model, timeout=180)
+            proposal = parse_llm_response(raw)
+        except Exception as e:
+            print(color(f"  LLM call failed: {e}", C_RED))
+            counts["errored"] += 1
+            continue
+
+        new_content = proposal["new_content"]
+
+        try:
+            validate_proposal(original, new_content)
+        except ValidationError as e:
+            print(color(f"  ✗ rejected proposal: {e}", C_RED))
+            counts["rejected"] += 1
+            continue
+
+        if new_content == original:
+            print(color("  ✓ already well-organized, no changes proposed", C_GREEN))
+            counts["unchanged"] += 1
+            continue
+
+        if proposal["summary"]:
+            print(color(f"  summary: {proposal['summary']}", C_DIM))
+        if proposal["duplicates_flagged"]:
+            print(color("  ⚠ possible duplicates (not merged, review manually):", C_YELLOW))
+            for dup in proposal["duplicates_flagged"]:
+                print(color(f"    - {dup}", C_YELLOW))
+
+        print()
+        print(render_diff(original, new_content, filename=moc_path.name))
+        print()
+        print(color("Apply this reorganization? [y/N] ", C_BOLD), end="")
+        try:
+            answer = input().strip().lower()
+        except EOFError:
+            answer = "n"
+
+        if answer == "y":
+            moc_path.write_text(new_content)
+            print(color(f"  ✓ applied → {moc_path}", C_GREEN))
+            counts["applied"] += 1
+        else:
+            print(color("  → skipped, no changes written", C_YELLOW))
+            counts["skipped"] += 1
+
+    print()
+    print(color("─" * 72, C_DIM))
+    print(color("cleanup summary", C_BOLD))
+    for k, v in counts.items():
+        print(f"  {k:<10} {v}")
     return 0
 
 

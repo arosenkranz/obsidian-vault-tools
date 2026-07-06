@@ -58,18 +58,22 @@ def test_validate_accepts_reordering_that_keeps_all_links():
     validate_proposal(ORIGINAL, reordered)
 
 
-def test_validate_rejects_dropped_wikilink():
-    missing_link = (
+def test_validate_rejects_dropped_entry_url_and_wikilink_together():
+    # Deleting an entire entry drops both its wikilink and its URL — the
+    # URL check is what actually catches this (URL-anchored entries are no
+    # longer checked by wikilink text, see test_validate_accepts_retitling_
+    # a_url_anchored_wikilink), but the outcome must still be a rejection.
+    missing_entry = (
         "---\ntype: moc\n---\n"
         "# MOC Test\n\n"
         "## Resources\n\n"
         "- [[Foo Note]] — https://example.com/foo\n"
     )
     try:
-        validate_proposal(ORIGINAL, missing_link)
+        validate_proposal(ORIGINAL, missing_entry)
         assert False, "expected ValidationError"
     except ValidationError as e:
-        assert "Bar Note" in str(e)
+        assert "https://example.com/bar" in str(e)
 
 
 def test_validate_rejects_frontmatter_change():
@@ -85,6 +89,44 @@ def test_validate_rejects_frontmatter_change():
         assert False, "expected ValidationError"
     except ValidationError as e:
         assert "frontmatter" in str(e).lower()
+
+
+def test_validate_accepts_retitling_a_url_anchored_wikilink():
+    # The whole point of the garbled-title-fix feature: a wikilink sharing
+    # a line with a URL may be renamed freely, since the URL still anchors
+    # the entry to the same content.
+    retitled = (
+        "---\ntype: moc\n---\n"
+        "# MOC Test\n\n"
+        "## Resources\n\n"
+        "- [[Foo Article]] — https://example.com/foo\n"
+        "- [[Bar Note]] — https://example.com/bar\n"
+    )
+    # Should not raise
+    validate_proposal(ORIGINAL, retitled)
+
+
+def test_validate_rejects_renamed_bare_wikilink_with_no_url():
+    # A bare wikilink (no URL on its line) is the only anchor for that
+    # entry — usually a link to another vault note. Renaming it would
+    # silently break the real Obsidian link, so it must survive verbatim.
+    original_with_bare_link = (
+        "---\ntype: moc\n---\n"
+        "# MOC Test\n\n"
+        "## Resources\n\n"
+        "- [[Neovim]] — my editor setup\n"
+    )
+    renamed_bare_link = (
+        "---\ntype: moc\n---\n"
+        "# MOC Test\n\n"
+        "## Resources\n\n"
+        "- [[Neovim Notes]] — my editor setup\n"
+    )
+    try:
+        validate_proposal(original_with_bare_link, renamed_bare_link)
+        assert False, "expected ValidationError"
+    except ValidationError as e:
+        assert "Neovim" in str(e)
 
 
 def test_validate_rejects_dropped_url():
