@@ -84,6 +84,8 @@ MOC SUBCOMMANDS:
     mocs new            Create new MOC from template
     mocs orphan         Find notes not linked from any MOC
     mocs add            Add note to MOC interactively
+    mocs cleanup <name>  LLM-reorganize one MOC (shows diff, asks to confirm)
+    mocs cleanup --all   LLM-reorganize every MOC (one diff/confirm each)
     mocs update         Update MOCs in directory
 
 EXAMPLES:
@@ -968,6 +970,20 @@ moc_add() {
     echo -e "${GREEN}✓ Added '$note_name' to $(basename "$selected_moc")${NC}"
 }
 
+moc_cleanup() {
+    local target="$1"
+    if [ -z "$target" ]; then
+        echo -e "${RED}Usage: ov mocs cleanup <name>${NC}"
+        echo -e "       ov mocs cleanup --all"
+        return 1
+    fi
+    if [ "$target" = "--all" ]; then
+        python3 "$SCRIPT_DIR/moc_cleanup.py" --all --vault "$VAULT_DIR"
+    else
+        python3 "$SCRIPT_DIR/moc_cleanup.py" "$target" --vault "$VAULT_DIR"
+    fi
+}
+
 # publish_doc: optionally convert a .md note to HTML via LLM, then rsync to docs host
 publish_doc() {
     local file=""
@@ -1183,6 +1199,10 @@ case "${1:-help}" in
                 ;;
             add)
                 moc_add
+                ;;
+            cleanup)
+                shift 2
+                moc_cleanup "$1"
                 ;;
             update)
                 echo "MOC update functionality coming soon"
