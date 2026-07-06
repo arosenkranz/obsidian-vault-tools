@@ -217,14 +217,17 @@ list_all_mocs() {
 }
 
 # Helper: Interactive MOC picker with fzf
+# IMPORTANT: this function's stdout is captured via $(select_moc_interactive)
+# by callers, so ONLY the final selected MOC path may go to stdout. All
+# human-facing prompts/banners/lists MUST go to stderr (>&2).
 select_moc_interactive() {
     local mocs
     mocs=$(list_all_mocs)
     
     if [ -z "$mocs" ]; then
-        echo -e "${YELLOW}⚠ No MOCs found in vault.${NC}"
-        echo -e "   Create one with: ov mocs new <name>"
-        echo ""
+        echo -e "${YELLOW}⚠ No MOCs found in vault.${NC}" >&2
+        echo -e "   Create one with: ov mocs new <name>" >&2
+        echo "" >&2
         return 1  # No MOCs available, but don't fail capture
     fi
     
@@ -232,19 +235,25 @@ select_moc_interactive() {
     local fzf_input
     fzf_input=$(echo "$mocs" | awk -F'|' '{printf "%3d | %s\n", $1, $2}')
     
-    echo ""
-    echo -e "${CYAN}📁${NC} Choose MOC to link to (Enter to skip, q to cancel):"
-    echo ""
-    echo "$fzf_input"
-    echo ""
+    echo "" >&2
+    echo -e "${CYAN}📁${NC} Choose MOC to link to (Enter to skip, q to cancel):" >&2
+    echo "" >&2
+    echo "$fzf_input" >&2
+    echo "" >&2
     
     # Use fzf if available, otherwise simple numbered list
     local selected
     if command -v fzf &> /dev/null; then
-        selected=$(echo "$fzf_input" | fzf --preview='echo "{}" | cut -d"|" -f2' --preview-window=down:3:wrap --bind "ctrl-c:abort" --bind "enter:abort" --height 50%)
+        # NOTE: no --bind enter:abort here — Enter must ACCEPT the highlighted
+        # entry (fzf's default). Only ctrl-c/esc should cancel without a value.
+        # IMPORTANT: the MOC list must be piped into fzf via stdin (that's how
+        # fzf receives its candidates) — do NOT redirect stdin from /dev/tty
+        # here, that would replace the list with an empty input and make
+        # nothing selectable. fzf opens /dev/tty on its own for keystrokes.
+        selected=$(echo "$fzf_input" | fzf --preview='echo "{}" | cut -d"|" -f2' --preview-window=down:3:wrap --bind "ctrl-c:abort" --bind "esc:abort" --height 50%)
         
         if [ -z "$selected" ]; then
-            # User pressed Enter (no selection) or cancelled
+            # User cancelled (ctrl-c/esc) or made no selection
             return 0
         fi
         
@@ -259,12 +268,12 @@ select_moc_interactive() {
         while IFS='|' read -r count name path; do
             i=$((i+1))
             moc_array+=("$i|$name|$path")
-            echo "  [$i] $name ($count items)"
+            echo "  [$i] $name ($count items)" >&2
         done <<< "$mocs"
         
         local total=${#moc_array[@]}
-        echo ""
-        echo -n "  Type number (1-$total), Enter to skip, or q to cancel: "
+        echo "" >&2
+        echo -n "  Type number (1-$total), Enter to skip, or q to cancel: " >&2
         
         read -r choice
         
@@ -277,12 +286,12 @@ select_moc_interactive() {
                     local selected_item="${moc_array[$((choice-1))]}"
                     echo "$selected_item" | cut -d'|' -f3
                 else
-                    echo -e "${RED}Invalid number${NC}"
+                    echo -e "${RED}Invalid number${NC}" >&2
                     select_moc_interactive  # Recurse
                 fi
                 ;;
             *)
-                echo -e "${RED}Invalid input${NC}"
+                echo -e "${RED}Invalid input${NC}" >&2
                 select_moc_interactive  # Recurse
                 ;;
         esac
