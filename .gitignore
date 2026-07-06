@@ -20,3 +20,6 @@ __pycache__/
 # Build artifacts
 dist/
 build/
+
+# Generated plan-review presentations (regenerate via build_presentation.py)
+docs/plans/presentations/*.html
