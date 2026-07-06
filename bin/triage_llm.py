@@ -339,6 +339,104 @@ def show_proposal(p: dict) -> None:
 # Apply
 # ---------------------------------------------------------------------------
 
+def extract_moc_name_from_frontmatter(fm: dict) -> str | None:
+    """Pull a bare MOC name (e.g. 'MOC Music') out of a note's `moc:`
+    frontmatter field, however it happens to have been parsed.
+
+    `moc: [[MOC Music]]` written by `ov capture --moc` round-trips through
+    split_frontmatter()'s bracket-list heuristic as a one-item list whose
+    element is the string '[MOC Music]' (the outer brackets are consumed as
+    the list delimiter, the inner pair survives as part of the string) —
+    see split_frontmatter()'s docstring. This unwraps that quirk as well as
+    a plain string value, so callers don't need to know about the parser's
+    internals.
+    """
+    raw = fm.get("moc")
+    if not raw:
+        return None
+    if isinstance(raw, list):
+        raw = raw[0] if raw else ""
+    raw = str(raw).strip()
+    # Strip any leftover wikilink brackets (0, 1, or 2 pairs depending on
+    # how the value made it through frontmatter parsing).
+    raw = raw.strip("[]")
+    return raw or None
+
+
+def _resolve_moc_path(vault: Path, moc_name: str) -> Path | None:
+    """Find a MOC file by its bare name (e.g. 'MOC Music'). Returns None if
+    no exact filename match exists anywhere under the vault."""
+    candidate = f"{moc_name}.md" if moc_name.lower().startswith("moc ") else f"MOC {moc_name}.md"
+    for moc in vault.rglob("MOC*.md"):
+        if moc.name == candidate:
+            return moc
+    return None
+
+
+def sync_moc_link_after_rename(vault: Path, fm: dict, old_title: str, new_title: str) -> None:
+    """Best-effort: if this note was linked from a MOC at capture time
+    (`moc:` frontmatter field) and triage just renamed it, update that
+    MOC's entry so the link keeps resolving instead of silently breaking.
+
+    Failure here must never abort a triage move that already succeeded on
+    disk — the file move is the important part; this is a courtesy
+    follow-up. Any error is swallowed and reported, not raised.
+    """
+    if old_title == new_title:
+        return
+    moc_name = extract_moc_name_from_frontmatter(fm)
+    if not moc_name:
+        return
+    try:
+        moc_path = _resolve_moc_path(vault, moc_name)
+        if moc_path is None:
+            print(color(
+                f"  ⚠ note was linked from '{moc_name}' but that MOC file "
+                f"wasn't found — link not updated, check manually", C_YELLOW))
+            return
+        changed = update_moc_entry_title(moc_path, old_title, new_title)
+        if changed:
+            print(color(f"  ✓ updated '{moc_name}' entry: [[{old_title}]] → [[{new_title}]]", C_GREEN))
+        else:
+            print(color(
+                f"  ⚠ note was linked from '{moc_name}' but no matching "
+                f"[[{old_title}]] entry was found there — check manually", C_YELLOW))
+    except Exception as e:
+        print(color(f"  ⚠ failed to update MOC link after rename: {e}", C_YELLOW))
+
+
+def update_moc_entry_title(moc_file: Path, old_title: str, new_title: str) -> bool:
+    """Rename a `[[old_title]]` wikilink to `[[new_title]]` inside a MOC's
+    body (never inside its frontmatter block). Returns True if a rename was
+    made, False if there was nothing to do (title unchanged, or no matching
+    entry found — the note may not actually be linked from this MOC).
+
+    This is intentionally narrow: it only fixes the *entry text* so the
+    link keeps resolving after triage renames a file. It does not reorder,
+    dedupe, or otherwise reorganize the MOC — that's `ov mocs cleanup`'s
+    job, and it's LLM-assisted/human-approved on purpose. This helper runs
+    unattended as part of triage, so it must be a mechanical, unambiguous
+    string substitution only.
+    """
+    if old_title == new_title:
+        return False
+    if not moc_file.is_file():
+        return False
+
+    text = moc_file.read_text()
+    fm_match = FM_RE.match(text)
+    fm_end = fm_match.end() if fm_match else 0
+    frontmatter_block, body = text[:fm_end], text[fm_end:]
+
+    target_link = f"[[{old_title}]]"
+    if target_link not in body:
+        return False
+
+    new_body = body.replace(target_link, f"[[{new_title}]]")
+    moc_file.write_text(frontmatter_block + new_body)
+    return True
+
+
 def apply_proposal(
     vault: Path,
     src: Path,
@@ -395,6 +493,9 @@ def apply_proposal(
 
     target.write_text(render_frontmatter(new_fm) + "\n" + new_body.lstrip("\n"))
     src.unlink()
+
+    sync_moc_link_after_rename(vault, fm, src.stem, new_title)
+
     return target
 
 

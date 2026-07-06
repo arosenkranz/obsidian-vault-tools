@@ -62,6 +62,7 @@ The triage script is **suggest-only**:
 - Bodies are never auto-rewritten (`body_patch` forced to null in the v1 prompt).
 - Wikilinks to existing notes are not proposed (`links_to_add` forced to `[]` in v1).
 - Targets are sanity-checked: must be inside the vault, must be inside one of the configured PARA roots.
+- If a note carries a `moc:` frontmatter field (set by `ov capture --moc`) and triage renames it, the script does a best-effort update of that MOC's `[[old title]]` entry to `[[new title]]` so the link keeps resolving. This is a mechanical string substitution only (see `update_moc_entry_title` in `bin/triage_llm.py`) — it never reorders or otherwise edits the MOC, and any failure is reported but does not roll back the already-completed file move.
 
 Future v2 changes (append-to-existing, body cleanup, wikilinks) will require explicit AGENTS.md schema updates — that file is the contract.
 
