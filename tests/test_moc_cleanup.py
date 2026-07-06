@@ -32,3 +32,73 @@ def test_build_prompt_requests_json_shape():
     prompt = build_prompt("content", moc_name="MOC Test")
     assert '"new_content"' in prompt
     assert '"duplicates_flagged"' in prompt
+
+
+from moc_cleanup import validate_proposal, ValidationError
+
+ORIGINAL = (
+    "---\ntype: moc\n---\n"
+    "# MOC Test\n\n"
+    "## Resources\n\n"
+    "- [[Foo Note]] — https://example.com/foo\n"
+    "- [[Bar Note]] — https://example.com/bar\n"
+)
+
+
+def test_validate_accepts_reordering_that_keeps_all_links():
+    reordered = (
+        "---\ntype: moc\n---\n"
+        "# MOC Test\n\n"
+        "## Resources\n\n"
+        "### Example.com\n"
+        "- [[Bar Note]] — https://example.com/bar\n"
+        "- [[Foo Note]] — https://example.com/foo\n"
+    )
+    # Should not raise
+    validate_proposal(ORIGINAL, reordered)
+
+
+def test_validate_rejects_dropped_wikilink():
+    missing_link = (
+        "---\ntype: moc\n---\n"
+        "# MOC Test\n\n"
+        "## Resources\n\n"
+        "- [[Foo Note]] — https://example.com/foo\n"
+    )
+    try:
+        validate_proposal(ORIGINAL, missing_link)
+        assert False, "expected ValidationError"
+    except ValidationError as e:
+        assert "Bar Note" in str(e)
+
+
+def test_validate_rejects_frontmatter_change():
+    changed_fm = (
+        "---\ntype: moc\nextra: field\n---\n"
+        "# MOC Test\n\n"
+        "## Resources\n\n"
+        "- [[Foo Note]] — https://example.com/foo\n"
+        "- [[Bar Note]] — https://example.com/bar\n"
+    )
+    try:
+        validate_proposal(ORIGINAL, changed_fm)
+        assert False, "expected ValidationError"
+    except ValidationError as e:
+        assert "frontmatter" in str(e).lower()
+
+
+def test_validate_rejects_dropped_url():
+    # Title changed AND its URL vanished entirely — url count check catches
+    # cases the wikilink check might miss (e.g. plain URLs in prose).
+    missing_url = (
+        "---\ntype: moc\n---\n"
+        "# MOC Test\n\n"
+        "## Resources\n\n"
+        "- [[Foo Note]] — https://example.com/foo\n"
+        "- [[Bar Note]] — some text with no url\n"
+    )
+    try:
+        validate_proposal(ORIGINAL, missing_url)
+        assert False, "expected ValidationError"
+    except ValidationError as e:
+        assert "url" in str(e).lower() or "link" in str(e).lower()

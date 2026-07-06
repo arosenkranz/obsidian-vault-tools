@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -28,6 +29,56 @@ from triage_llm import (  # noqa: E402
     C_BOLD, C_CYAN, C_DIM, C_GREEN, C_RED, C_YELLOW,
     call_llm, color, extract_json, load_config,
 )
+
+
+WIKILINK_RE = re.compile(r"\[\[([^\]|]+)")
+URL_RE = re.compile(r"https?://\S+")
+FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
+
+
+class ValidationError(Exception):
+    """Raised when an LLM's proposed MOC content fails a structural safety
+    check. Callers must treat this as 'reject the proposal', never as
+    'partially apply it'."""
+
+
+def _frontmatter_block(text: str) -> str | None:
+    m = FRONTMATTER_RE.match(text)
+    return m.group(0) if m else None
+
+
+def validate_proposal(original: str, proposed: str) -> None:
+    """Structural safety net, independent of prompt compliance. Raises
+    ValidationError on any violation; returns None (silently) if the
+    proposal is safe to show as a diff for human approval.
+
+    This does NOT guarantee the reorganization is *good* — only that it
+    didn't lose frontmatter, wikilinks, or URLs present in the original.
+    """
+    orig_fm = _frontmatter_block(original)
+    new_fm = _frontmatter_block(proposed)
+    if orig_fm != new_fm:
+        raise ValidationError(
+            "proposal changes the frontmatter block, which is forbidden"
+        )
+
+    orig_links = set(WIKILINK_RE.findall(original))
+    new_links = set(WIKILINK_RE.findall(proposed))
+    dropped_links = orig_links - new_links
+    if dropped_links:
+        raise ValidationError(
+            f"proposal drops {len(dropped_links)} wikilink(s) present in the "
+            f"original: {', '.join(sorted(dropped_links))}"
+        )
+
+    orig_urls = set(URL_RE.findall(original))
+    new_urls = set(URL_RE.findall(proposed))
+    dropped_urls = orig_urls - new_urls
+    if dropped_urls:
+        raise ValidationError(
+            f"proposal drops {len(dropped_urls)} URL(s) present in the "
+            f"original: {', '.join(sorted(dropped_urls))}"
+        )
 
 
 PROMPT_TEMPLATE = """\
