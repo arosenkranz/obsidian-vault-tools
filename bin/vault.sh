@@ -158,6 +158,52 @@ slugify_title() {
     printf '%s' "$raw"
 }
 
+# Returns 0 (true) if the given string looks like a bare http(s) URL with
+# nothing else on the line (allowing surrounding whitespace).
+is_bare_url() {
+    local s
+    s="$(printf '%s' "$1" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+    [[ "$s" =~ ^https?://[^[:space:]]+$ ]]
+}
+
+# Best-effort fetch of a URL's <title>. Short timeout, never fatal: prints
+# nothing (and returns non-zero) on any failure so callers can fall back to
+# slugifying the URL itself. Requires curl + python3, both already used
+# elsewhere in this script.
+fetch_url_title() {
+    local url="$1"
+    command -v curl &> /dev/null || return 1
+    command -v python3 &> /dev/null || return 1
+
+    local html
+    html=$(curl -sL --max-time 5 -A "Mozilla/5.0 (compatible; ov-capture/1.0)" "$url" 2>/dev/null) || return 1
+    [ -z "$html" ] && return 1
+
+    # Bail out on common bot-challenge / interstitial pages (Cloudflare, etc.)
+    # rather than returning their generic title ("Just a moment...") as if
+    # it were the real page title.
+    if printf '%s' "$html" | grep -qiE 'challenges\.cloudflare\.com|cf-browser-verification|cf_chl_opt|Just a moment'; then
+        return 1
+    fi
+
+    local title
+    title=$(printf '%s' "$html" | python3 -c '
+import sys, re, html
+data = sys.stdin.read()
+m = re.search(r"<title[^>]*>(.*?)</title>", data, re.IGNORECASE | re.DOTALL)
+if not m:
+    sys.exit(1)
+text = html.unescape(m.group(1))
+text = re.sub(r"\s+", " ", text).strip()
+if not text:
+    sys.exit(1)
+print(text)
+' 2>/dev/null) || return 1
+
+    [ -z "$title" ] && return 1
+    printf '%s' "$title"
+}
+
 # Helper: Count wikilinks in a MOC file to show item count
 count_moc_items() {
     local moc_file="$1"
@@ -441,9 +487,22 @@ EOF
         return 1
     fi
 
-    # Auto-derive title from first non-empty line if not provided
+    # Auto-derive title from first non-empty line if not provided.
+    # If that line is a bare URL, try fetching the page's real <title>
+    # instead of slugifying the URL itself (which produces mangled
+    # filenames like "https example com foo-bar"). Best-effort only:
+    # any fetch failure silently falls back to the old URL-slug behavior.
+    local first_line url_title=""
+    first_line="$(printf '%s\n' "$body" | awk 'NF { print; exit }')"
+    if is_bare_url "$first_line"; then
+        url_title="$(fetch_url_title "$first_line")" || url_title=""
+    fi
     if [ -z "$title" ]; then
-        title="$(printf '%s\n' "$body" | awk 'NF { print; exit }')"
+        if [ -n "$url_title" ]; then
+            title="$url_title"
+        else
+            title="$first_line"
+        fi
     fi
     title="$(slugify_title "$title")"
 
@@ -467,11 +526,23 @@ EOF
         fi
     fi
 
-    # Get snippet for MOC entry (first line of body, truncated)
+    # Get snippet for MOC entry (first line of body, truncated).
+    # For bare-URL captures, use the fetched page title (if we got one)
+    # so the MOC entry reads like the hand-curated ones instead of a
+    # URL chopped off mid-path. Truncate at a word boundary, never mid-URL.
     local snippet
-    snippet=$(printf '%s\n' "$body" | head -1 | cut -c1-60)
-    if [ ${#snippet} -lt $(printf '%s' "$body" | head -1 | wc -c) ]; then
-        snippet="${snippet}..."
+    if is_bare_url "$first_line" && [ -n "$url_title" ]; then
+        snippet="$url_title"
+    else
+        snippet="$(printf '%s\n' "$body" | head -1)"
+    fi
+    if [ "${#snippet}" -gt 60 ]; then
+        if is_bare_url "$first_line"; then
+            # Never truncate a bare URL mid-path; leave it whole.
+            :
+        else
+            snippet="$(printf '%s' "$snippet" | cut -c1-60 | sed -E 's/[[:space:]]+[^[:space:]]*$//')..."
+        fi
     fi
 
     # Build filename: "YYYY-MM-DD HHMM <Title>.md"
