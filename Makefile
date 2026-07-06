@@ -2,7 +2,7 @@ PREFIX     ?= $(HOME)/.local
 BIN_DIR    ?= $(PREFIX)/bin
 CONFIG_DIR ?= $(HOME)/.config/ov
 
-.PHONY: help install uninstall link unlink config check
+.PHONY: help install uninstall link unlink config check test
 
 help:
 	@echo "Targets:"
@@ -10,7 +10,8 @@ help:
 	@echo "  link       Just create the symlink"
 	@echo "  unlink     Remove the symlink"
 	@echo "  config     Create $(CONFIG_DIR)/config from example if missing"
-	@echo "  check      Syntax-check both scripts"
+	@echo "  check      Syntax-check the scripts"
+	@echo "  test       Run the pytest suite (tests/)"
 	@echo "  uninstall  unlink + leave config in place"
 	@echo ""
 	@echo "Variables:"
@@ -26,7 +27,7 @@ install: link config
 link:
 	@mkdir -p $(BIN_DIR)
 	@ln -sf $(CURDIR)/bin/vault.sh $(BIN_DIR)/ov
-	@chmod +x $(CURDIR)/bin/vault.sh $(CURDIR)/bin/triage_llm.py
+	@chmod +x $(CURDIR)/bin/vault.sh $(CURDIR)/bin/triage_llm.py $(CURDIR)/bin/moc_cleanup.py
 	@echo "✓ Linked $(BIN_DIR)/ov → $(CURDIR)/bin/vault.sh"
 
 unlink:
@@ -45,6 +46,10 @@ config:
 check:
 	@bash -n bin/vault.sh && echo "✓ vault.sh syntax OK"
 	@python3 -c "import ast; ast.parse(open('bin/triage_llm.py').read())" && echo "✓ triage_llm.py syntax OK"
+	@python3 -c "import ast; ast.parse(open('bin/moc_cleanup.py').read())" && echo "✓ moc_cleanup.py syntax OK"
+
+test:
+	python3 -m pytest tests/ -v
 
 uninstall: unlink
 	@echo "Config at $(CONFIG_DIR) left in place. Remove manually if desired."
