@@ -264,6 +264,111 @@ list_all_mocs() {
     done | sort -t'|' -k2
 }
 
+# Helper: List all real PARA folders (any depth) as candidate triage targets.
+# Includes the four PARA roots themselves plus every subdirectory beneath
+# them, so deeply nested folders (e.g. 02-Areas/Work/Clients/Acme) are
+# selectable, not just the first level.
+list_all_para_folders() {
+    local root
+    for root in "$PROJECTS_DIR" "$AREAS_DIR" "$RESOURCES_DIR" "$ARCHIVE_DIR"; do
+        [ -d "$root" ] || continue
+        echo "$root"
+        find "$root" -type d 2>/dev/null | sort
+    done | awk '!seen[$0]++'
+}
+
+# Helper: Interactive destination-folder picker with fzf (falls back to a
+# numbered list). Mirrors select_moc_interactive()'s stdout/stderr contract:
+# ONLY the final selected folder path may go to stdout, everything
+# human-facing goes to stderr. Also supports typing a brand-new path (created
+# on demand) for filing into a folder that doesn't exist yet.
+#
+# Echoes the chosen absolute folder path on stdout, or nothing if cancelled.
+select_target_folder_interactive() {
+    local folders
+    folders=$(list_all_para_folders)
+
+    if [ -z "$folders" ]; then
+        echo -e "${YELLOW}⚠ No PARA folders found under $VAULT_DIR.${NC}" >&2
+        return 1
+    fi
+
+    # Display each folder relative to the vault root for readability.
+    local display
+    display=$(echo "$folders" | sed "s#^$VAULT_DIR/##")
+
+    echo "" >&2
+    echo -e "${CYAN}📁${NC} Choose destination folder (type a new path to create one, q to cancel):" >&2
+    echo "" >&2
+
+    local chosen_display=""
+    if command -v fzf &> /dev/null; then
+        # NOTE: no --bind enter:abort — Enter accepts the highlighted/typed
+        # entry (fzf's default). --print-query lets the user type a path that
+        # isn't in the candidate list (new folder) and still get it back even
+        # with no match highlighted. Only ctrl-c/esc cancel without a value.
+        local fzf_out
+        fzf_out=$(echo "$display" | fzf --print-query --preview='echo "New folder: {q}" ; echo ; echo "{}"' --preview-window=down:3:wrap --bind "ctrl-c:abort" --bind "esc:abort" --height 60%)
+        local fzf_status=$?
+        if [ $fzf_status -ne 0 ]; then
+            return 0  # user cancelled
+        fi
+        # fzf --print-query prints the typed query on line 1, then the
+        # selected match (if any) on line 2. Prefer the match; fall back to
+        # the typed query so a not-yet-existing folder can still be chosen.
+        local query match
+        query=$(echo "$fzf_out" | sed -n '1p')
+        match=$(echo "$fzf_out" | sed -n '2p')
+        chosen_display="${match:-$query}"
+    else
+        # Fallback: simple numbered list, plus the option to type a path.
+        local i=0
+        local folder_array=()
+        while IFS= read -r f; do
+            i=$((i+1))
+            folder_array+=("$f")
+            echo "  [$i] $f" >&2
+        done <<< "$display"
+
+        local total=${#folder_array[@]}
+        echo "" >&2
+        echo -n "  Type number (1-$total), a new path, or q to cancel: " >&2
+        read -r choice
+
+        case "$choice" in
+            q|Q|"")
+                return 0
+                ;;
+            *[!0-9]*)
+                # Contains a non-digit (e.g. a typed path like "02-Areas/New") -> literal path
+                chosen_display="$choice"
+                ;;
+            *)
+                # All-digits -> treat as a 1-based index into the list
+                if [ "$choice" -ge 1 ] && [ "$choice" -le "$total" ]; then
+                    chosen_display="${folder_array[$((choice-1))]}"
+                else
+                    chosen_display="$choice"  # out of range -> treat as literal path
+                fi
+                ;;
+        esac
+    fi
+
+    [ -z "$chosen_display" ] && return 0
+
+    # Strip any leading/trailing slashes the user might have typed.
+    chosen_display="${chosen_display#/}"
+    chosen_display="${chosen_display%/}"
+
+    local chosen_abs="$VAULT_DIR/$chosen_display"
+    if [ ! -d "$chosen_abs" ]; then
+        echo -e "${YELLOW}📂 '$chosen_display' doesn't exist yet — creating it.${NC}" >&2
+        mkdir -p "$chosen_abs"
+    fi
+
+    echo "$chosen_abs"
+}
+
 # Helper: Interactive MOC picker with fzf
 # IMPORTANT: this function's stdout is captured via $(select_moc_interactive)
 # by callers, so ONLY the final selected MOC path may go to stdout. All
@@ -665,51 +770,26 @@ triage_inbox() {
         local basename="${filename%.md}"
         
         echo -e "${PURPLE}📄 $basename${NC}"
-        echo "   [1] 01-Projects"
-        echo "   [2] 02-Areas/Work"
-        echo "   [3] 02-Areas/Learning"
-        echo "   [4] 02-Areas/Personal"
-        echo "   [5] 03-Resources"
-        echo "   [6] 04-Archive"
-        echo "   [s] Skip"
-        echo "   [d] Delete"
-        echo -n "   Choice: "
+        echo -n "   [Enter] Pick folder (fzf)   [s] Skip   [d] Delete   Choice: "
         
         read -r choice
         case $choice in
-            1)
-                mv "$file" "$PROJECTS_DIR/"
-                echo -e "   ${GREEN}→ Moved to Projects${NC}\n"
-                ;;
-            2)
-                mkdir -p "$AREAS_DIR/Work"
-                mv "$file" "$AREAS_DIR/Work/"
-                echo -e "   ${GREEN}→ Moved to Areas/Work${NC}\n"
-                ;;
-            3)
-                mkdir -p "$AREAS_DIR/Learning"
-                mv "$file" "$AREAS_DIR/Learning/"
-                echo -e "   ${GREEN}→ Moved to Areas/Learning${NC}\n"
-                ;;
-            4)
-                mkdir -p "$AREAS_DIR/Personal"
-                mv "$file" "$AREAS_DIR/Personal/"
-                echo -e "   ${GREEN}→ Moved to Areas/Personal${NC}\n"
-                ;;
-            5)
-                mv "$file" "$RESOURCES_DIR/"
-                echo -e "   ${GREEN}→ Moved to Resources${NC}\n"
-                ;;
-            6)
-                mv "$file" "$ARCHIVE_DIR/"
-                echo -e "   ${GREEN}→ Moved to Archive${NC}\n"
-                ;;
             d|D)
                 rm "$file"
                 echo -e "   ${RED}→ Deleted${NC}\n"
                 ;;
-            s|S|"")
+            s|S)
                 echo -e "   ${YELLOW}→ Skipped${NC}\n"
+                ;;
+            ""|f|F)
+                local dest_dir
+                dest_dir=$(select_target_folder_interactive)
+                if [ -z "$dest_dir" ]; then
+                    echo -e "   ${YELLOW}→ Skipped${NC}\n"
+                    continue
+                fi
+                mv "$file" "$dest_dir/"
+                echo -e "   ${GREEN}→ Moved to ${dest_dir#$VAULT_DIR/}${NC}\n"
                 ;;
             *)
                 echo -e "   ${YELLOW}→ Invalid choice, skipped${NC}\n"
