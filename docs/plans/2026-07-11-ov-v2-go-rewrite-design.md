@@ -23,7 +23,7 @@ Rewrite `obsidian-vault-tools` (bash `vault.sh` ~1,200 ln + python `triage_llm.p
 | Approach | clean-room v2 | porting clunky UX faithfully preserves the clunk |
 | Frontends | CLI + web over stateless core verbs | "all of it eventually" in web; mobile capture |
 | Web stack | Go templates + htmx, go:embed, stdlib ServeMux | no node toolchain; single-binary embed |
-| CLI UX | flags-first; bubbletea for triage approval, pickers, diff-confirm | scripting/agent-safe; TUI where it earns it |
+| CLI UX | flags-first; bubbletea v2 for triage approval, pickers, diff-confirm; huh for prompts/forms; glamour for note preview | scripting/agent-safe; TUI where it earns it |
 | LLM | subprocess contract preserved (`OV_LLM_CMD`, stdin prompt → stdout) | zero new auth surface; per-machine provider swap |
 | Deployment | `ov serve` localhost on the Mac; remote later = Tailscale/tsnet | Obsidian Sync is E2E-encrypted, no server API — no homelab replica exists |
 | Repo | same repo; Go replaces `bin/`; `templates/`, `docs/` stay | history preserved |
@@ -40,7 +40,7 @@ Rewrite `obsidian-vault-tools` (bash `vault.sh` ~1,200 ln + python `triage_llm.p
 
 ## Architecture
 
-Single Go module. Direct deps: cobra; bubbletea+bubbles+lipgloss (one unit); go-toml; go-diff; goldmark (render). Stdlib ServeMux (Go 1.22+ method+wildcard routing) — no chi, no viper, no yaml, no SSH lib.
+Single Go module. Direct deps: cobra; the Charm unit — bubbletea v2 + bubbles + lipgloss + huh (prompt/form flows) + glamour (terminal markdown preview; engine is goldmark, already in the budget for render); go-toml; go-diff; goldmark. Stdlib ServeMux (Go 1.22+ method+wildcard routing) — no chi, no viper, no yaml, no SSH lib. Rejected from the Charm ecosystem: harmonica (animation), bubblezone (mouse), ntcharts (charts) — no need a vault tool can name.
 
 ```
 cmd/ov/            cobra commands — thin: parse flags → config.Load → core verb → render via tui/plain
@@ -62,9 +62,13 @@ internal/triage/   Propose(ctx, note) → Proposal; Validate(p); Apply(vault, no
                    MOC rename sync
 internal/moc/      LLM cleanup workflow only: ProposeCleanup, structural validator, Apply
                    (mechanical ops live in vault; split named in doc comments)
-internal/publish/  LLM→HTML convert; rsync/ssh push/remove/list-remote via subprocess
+internal/publish/  LLM→HTML convert; rsync/ssh push/remove/list-remote via subprocess.
+                   Target: the user's exe.dev VM (OV_DOCS_HOST; SSH brokered by exe.dev,
+                   rsync-over-ssh unchanged). exe.dev's HTTPS proxy fronts published docs
+                   with its own IAM — published notes are not public by default.
 internal/render/   goldmark md→HTML; RENDER_SOURCE marker splicing (port of render_html.py logic)
-internal/tui/      bubbletea models: folder picker, MOC picker, triage approval loop, diff-confirm
+internal/tui/      bubbletea v2 models: folder picker, MOC picker, triage approval loop
+                   (glamour-rendered note preview), diff-confirm; huh forms for ov new/confirms
 internal/web/      server.go (accepts injected net.Listener); routes.go; handlers.go (thin);
                    jobs.go (in-process job map); assets/ via go:embed
 ```
