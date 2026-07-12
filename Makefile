@@ -2,7 +2,7 @@ PREFIX     ?= $(HOME)/.local
 BIN_DIR    ?= $(PREFIX)/bin
 CONFIG_DIR ?= $(HOME)/.config/ov
 
-.PHONY: help install uninstall link unlink config check test
+.PHONY: help install uninstall link unlink config check test build gotest
 
 help:
 	@echo "Targets:"
@@ -53,3 +53,11 @@ test:
 
 uninstall: unlink
 	@echo "Config at $(CONFIG_DIR) left in place. Remove manually if desired."
+
+build:
+	@mkdir -p dist
+	go build -o dist/ov2 ./cmd/ov
+	@echo "✓ Built dist/ov2"
+
+gotest:
+	go test ./...
