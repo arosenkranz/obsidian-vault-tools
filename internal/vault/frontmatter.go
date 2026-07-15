@@ -35,8 +35,10 @@ func ParseNote(text string) (*Frontmatter, string) {
 		after = after[1:]
 	} else if after != "" {
 		// "---" was a prefix of a longer line (e.g. "----"): not a delimiter.
-		// The python regex requires \n or EOF after ---; keep searching is
-		// out of scope for the mined corpus — treat as no frontmatter.
+		// v2 deliberately treats an inner line starting "----" as
+		// no-frontmatter — a round-trip-safe divergence from python's FM_RE,
+		// whose optional trailing \n would lossily split such a line,
+		// leaking the fourth dash into the body (inventory #84).
 		return nil, text
 	}
 	return &Frontmatter{lines: strings.Split(inner, "\n"), closingNewline: closingNewline}, after
@@ -57,6 +59,9 @@ func (f *Frontmatter) Render() string {
 // A declaring line is `key:` at zero indent (comments and indented
 // continuation lines never match).
 func (f *Frontmatter) keyLine(key string) int {
+	if f == nil {
+		return -1
+	}
 	for i, line := range f.lines {
 		if strings.HasPrefix(line, "#") {
 			continue
@@ -113,17 +118,39 @@ func (f *Frontmatter) GetList(key string) ([]string, bool) {
 	return out, true
 }
 
+// blockEnd returns the index one past the contiguous run of continuation
+// lines (indented with space or tab) following the declaring line i —
+// e.g. the `  - a` items of a block-style list.
+func (f *Frontmatter) blockEnd(i int) int {
+	j := i + 1
+	for j < len(f.lines) && (strings.HasPrefix(f.lines[j], " ") || strings.HasPrefix(f.lines[j], "\t")) {
+		j++
+	}
+	return j
+}
+
+// Set replaces the key's declaring line AND any indented continuation lines
+// with a single `key: value` line (a block-style value collapses to the new
+// scalar/inline value — never orphaned list items), or appends the key.
 func (f *Frontmatter) Set(key, value string) {
+	if f == nil {
+		return
+	}
 	line := key + ": " + value
 	if i := f.keyLine(key); i >= 0 {
 		f.lines[i] = line
+		f.lines = append(f.lines[:i+1], f.lines[f.blockEnd(i):]...)
 		return
 	}
 	f.lines = append(f.lines, line)
 }
 
+// Delete removes the key's declaring line and its continuation lines.
 func (f *Frontmatter) Delete(key string) {
+	if f == nil {
+		return
+	}
 	if i := f.keyLine(key); i >= 0 {
-		f.lines = append(f.lines[:i], f.lines[i+1:]...)
+		f.lines = append(f.lines[:i], f.lines[f.blockEnd(i):]...)
 	}
 }

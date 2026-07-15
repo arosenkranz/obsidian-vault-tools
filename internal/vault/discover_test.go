@@ -20,7 +20,9 @@ func TestDiscoverFolders(t *testing.T) {
 	mk("01-Projects", "Home")
 	mk("03-Resources", "Music")
 	mk("01-Projects", "Work", "ClientA", "TooDeep") // depth 3: excluded
-	os.WriteFile(filepath.Join(vault, "01-Projects", "stray.md"), []byte("x"), 0o644)
+	if err := os.WriteFile(filepath.Join(vault, "01-Projects", "stray.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	got := DiscoverFolders(vault, []string{"01-Projects", "02-Areas", "03-Resources"})
 	want := []string{

@@ -87,3 +87,38 @@ func TestConditionalOnMissingFile(t *testing.T) {
 		t.Fatal("conditional write to missing file must error")
 	}
 }
+
+func TestCreateNewMode(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "note.md")
+	if err := WriteNoteAtomic(p, []byte("x"), ""); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Errorf("create-new mode = %o, want 0644", got)
+	}
+}
+
+func TestConditionalReplacePreservesMode(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "note.md")
+	if err := os.WriteFile(p, []byte("v1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, hash, err := ReadNote(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteNoteAtomic(p, []byte("v2"), hash); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("replace mode = %o, want original 0600", got)
+	}
+}

@@ -92,6 +92,63 @@ func TestSetAppendsNewKey(t *testing.T) {
 	}
 }
 
+// BUG(fixed): Set on a block-style key (`tags:` + indented `  - a` items)
+// used to replace only the declaring line, orphaning the continuation lines
+// as invalid YAML. v2 collapses the whole block to the new value.
+func TestSetCollapsesBlockList(t *testing.T) {
+	in := "---\ntags:\n  - music\n  - jazz\nstatus: inbox\n---\nbody"
+	fm, body := ParseNote(in)
+	fm.Set("tags", "[rock, blues]")
+	want := "---\ntags: [rock, blues]\nstatus: inbox\n---\nbody"
+	if got := fm.Render() + body; got != want {
+		t.Errorf("block collapse:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+// BUG(fixed): Delete on a block-style key used to leave its continuation
+// lines dangling. v2 removes the whole block.
+func TestDeleteRemovesBlockList(t *testing.T) {
+	in := "---\ntype: note\ntags:\n  - music\n  - jazz\nstatus: inbox\n---\n"
+	fm, _ := ParseNote(in)
+	fm.Delete("tags")
+	want := "---\ntype: note\nstatus: inbox\n---\n"
+	if got := fm.Render(); got != want {
+		t.Errorf("block delete:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+// CONTRACT: block keys the edit does not touch survive byte-for-byte
+// (companion to TestRoundTripByteIdentical).
+func TestSetPreservesUntouchedBlockKeys(t *testing.T) {
+	in := "---\ntags:\n  - deep\n  - nested\nstatus: inbox\n---\nbody"
+	fm, body := ParseNote(in)
+	fm.Set("status", "filed")
+	want := "---\ntags:\n  - deep\n  - nested\nstatus: filed\n---\nbody"
+	if got := fm.Render() + body; got != want {
+		t.Errorf("untouched block key:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+// A note without frontmatter parses to a nil *Frontmatter; every method
+// must be nil-safe so callers can operate on the parse result directly.
+func TestNilFrontmatterSafe(t *testing.T) {
+	fm, body := ParseNote("no frontmatter here\n")
+	if fm != nil || body != "no frontmatter here\n" {
+		t.Fatalf("fm = %v, body = %q", fm, body)
+	}
+	if _, ok := fm.Get("type"); ok {
+		t.Error("Get on nil fm must report not-found")
+	}
+	if _, ok := fm.GetList("tags"); ok {
+		t.Error("GetList on nil fm must report not-found")
+	}
+	fm.Set("type", "note") // must not panic
+	fm.Delete("type")      // must not panic
+	if fm.Render() != "" {
+		t.Error("nil fm must render empty")
+	}
+}
+
 func TestDelete(t *testing.T) {
 	fm, _ := ParseNote("---\ntype: note\nstatus: inbox\n---\n")
 	fm.Delete("status")
@@ -101,7 +158,7 @@ func TestDelete(t *testing.T) {
 	fm.Delete("missing") // must not panic
 }
 
-// Golden: new-note frontmatter built in preferred key order
+// CONTRACT: new-note frontmatter built in preferred key order
 // (triage_llm.py render_frontmatter line 145) — the byte contract for
 // every note ov has ever filed.
 func TestNewFrontmatterGolden(t *testing.T) {

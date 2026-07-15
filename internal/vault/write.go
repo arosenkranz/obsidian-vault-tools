@@ -32,6 +32,7 @@ func ReadNote(path string) (string, string, error) {
 // dotfiles so partial writes never sync), fsync, rename, best-effort
 // dir fsync. See design spec §core contracts.
 func WriteNoteAtomic(path string, content []byte, expectedHash string) error {
+	mode := os.FileMode(0o644) // create-new default
 	if expectedHash == "" {
 		if _, err := os.Lstat(path); err == nil {
 			return fmt.Errorf("%s: %w", path, ErrExists)
@@ -44,6 +45,12 @@ func WriteNoteAtomic(path string, content []byte, expectedHash string) error {
 		if hashBytes(cur) != expectedHash {
 			return fmt.Errorf("%s: %w", path, ErrChangedOnDisk)
 		}
+		// Conditional replace preserves the original file's permissions.
+		info, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("conditional write: %w", err)
+		}
+		mode = info.Mode().Perm()
 	}
 
 	dir := filepath.Dir(path)
@@ -59,6 +66,11 @@ func WriteNoteAtomic(path string, content []byte, expectedHash string) error {
 		return err
 	}
 	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	// CreateTemp made the file 0600; fix the mode before it becomes the note.
+	if err := tmp.Chmod(mode); err != nil {
 		tmp.Close()
 		return err
 	}
