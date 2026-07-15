@@ -11,17 +11,21 @@ import (
 
 var jsonFenceRe = regexp.MustCompile("(?s)```(?:json)?\\s*(.*?)```")
 
-// ExtractJSON is a 1:1 port of triage_llm.py extract_json — tolerant of
-// LLMs that wrap output in prose or markdown fences.
+// ExtractJSON ports triage_llm.py extract_json — tolerant of LLMs that wrap
+// output in prose or markdown fences. One deliberate tightening over the
+// python: only a top-level JSON *object* is accepted, so bare/fenced
+// non-object JSON (null, arrays, scalars) falls through to tier 3 instead
+// of being returned.
 func ExtractJSON(text string) (map[string]any, error) {
 	text = strings.TrimSpace(text)
 
 	var out map[string]any
-	if err := json.Unmarshal([]byte(text), &out); err == nil {
+	// json.Unmarshal leaves a nil map for JSON null — treat as not-found.
+	if err := json.Unmarshal([]byte(text), &out); err == nil && out != nil {
 		return out, nil
 	}
 	if m := jsonFenceRe.FindStringSubmatch(text); m != nil {
-		if err := json.Unmarshal([]byte(strings.TrimSpace(m[1])), &out); err == nil {
+		if err := json.Unmarshal([]byte(strings.TrimSpace(m[1])), &out); err == nil && out != nil {
 			return out, nil
 		}
 	}

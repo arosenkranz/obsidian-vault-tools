@@ -39,7 +39,20 @@ func TestExtractJSONErrors(t *testing.T) {
 		!strings.Contains(err.Error(), "no JSON object found") {
 		t.Errorf("want 'no JSON object found', got %v", err)
 	}
-	if _, err := ExtractJSON("{broken: json,}"); err == nil {
-		t.Error("malformed JSON inside braces must error")
+	if _, err := ExtractJSON("{broken: json,}"); err == nil ||
+		!strings.Contains(err.Error(), "could not parse JSON from LLM response") {
+		t.Errorf("want 'could not parse JSON from LLM response', got %v", err)
+	}
+}
+
+// BUG(fixed): bare or fenced `null` unmarshals cleanly into a nil map, so
+// ExtractJSON used to return (nil, nil) — a not-found masquerading as
+// success. It must fall through and report no object.
+func TestExtractJSONNullIsNotFound(t *testing.T) {
+	for _, in := range []string{"null", "```json\nnull\n```"} {
+		if _, err := ExtractJSON(in); err == nil ||
+			!strings.Contains(err.Error(), "no JSON object found") {
+			t.Errorf("ExtractJSON(%q): want 'no JSON object found', got %v", in, err)
+		}
 	}
 }
