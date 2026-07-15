@@ -23,14 +23,18 @@ func newDoctorCmd() *cobra.Command {
 				return err
 			}
 			if vaultFlag != "" {
-				cfg.VaultDir = vaultFlag // flag > env > file > default
+				// flag > env > file > default; flag values get the same
+				// ~/$VAR expansion Load applies to the file/env value.
+				cfg.VaultDir = config.ExpandPath(vaultFlag)
 			}
 			if err := cfg.Validate(); err != nil {
 				return err
 			}
 			fmt.Fprintf(out, "vault      ok  %s\n", cfg.VaultDir)
 
-			for _, root := range append([]string{cfg.Inbox}, cfg.ParaRoots()...) {
+			folders := append([]string{cfg.Inbox}, cfg.ParaRoots()...)
+			folders = append(folders, cfg.Meta)
+			for _, root := range folders {
 				p := filepath.Join(cfg.VaultDir, root)
 				if info, err := os.Stat(p); err == nil && info.IsDir() {
 					fmt.Fprintf(out, "folder     ok  %s\n", root)

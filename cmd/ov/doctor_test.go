@@ -47,7 +47,7 @@ func TestDoctorHealthyVault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("healthy vault must pass: %v\n%s", err, out)
 	}
-	for _, want := range []string{"vault", "ok"} {
+	for _, want := range []string{"vault", "ok", "99-meta"} {
 		if !strings.Contains(strings.ToLower(out), want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
@@ -77,6 +77,24 @@ func TestDoctorVaultFlagOverrides(t *testing.T) {
 	out, err := runDoctor(t, "--vault", goodVault)
 	if err != nil {
 		t.Fatalf("--vault override must win over config: %v\n%s", err, out)
+	}
+}
+
+func TestDoctorVaultFlagExpands(t *testing.T) {
+	// --vault values get the same ~/$VAR expansion as config values.
+	clearOVEnv(t)
+	goodVault := t.TempDir()
+	t.Setenv("MY_TEST_VAULT", goodVault)
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	os.WriteFile(cfgPath, []byte("vault_dir = \"/nonexistent\"\nllm_cmd = \"true\"\n"), 0o644)
+	t.Setenv("OV_CONFIG", cfgPath)
+
+	out, err := runDoctor(t, "--vault", "$MY_TEST_VAULT")
+	if err != nil {
+		t.Fatalf("--vault with $VAR must expand and pass: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, goodVault) {
+		t.Errorf("output should show the expanded vault path:\n%s", out)
 	}
 }
 

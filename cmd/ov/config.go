@@ -32,7 +32,11 @@ func newConfigCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("read old config: %w", err)
 			}
-			fmt.Fprint(cmd.OutOrStdout(), config.RenderTOML(config.ParseLegacy(string(data))))
+			kv := config.ParseLegacy(string(data))
+			if len(kv) == 0 {
+				return fmt.Errorf("no OV_* keys found in %s — is this already a v2 TOML config?", path)
+			}
+			fmt.Fprint(cmd.OutOrStdout(), config.RenderTOML(kv))
 			return nil
 		},
 	}
