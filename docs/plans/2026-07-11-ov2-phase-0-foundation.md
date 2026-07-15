@@ -1506,7 +1506,7 @@ git commit -m "Add tolerant 3-tier JSON decoder for LLM output"
 
 **Interfaces:**
 - Consumes: nothing
-- Produces: `func DiscoverFolders(vaultDir string, roots []string) []string` — vault-relative folder paths, each root then its subdirs then sub-subdirs (depth ≤ 2 below root), sorted at each level. Missing roots skipped silently. Used by `doctor` now; by triage prompt assembly in phase 3.
+- Produces: `func DiscoverFolders(vaultDir string, roots []string) []string` — vault-relative folder paths, each root then its subdirs then sub-subdirs (depth ≤ 2 below root), sorted at each level. Missing roots skipped silently. Used by triage prompt assembly in phase 3.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1628,7 +1628,7 @@ git commit -m "Add PARA folder discovery, depth-limited and sorted"
 - Test: `cmd/ov/doctor_test.go`
 
 **Interfaces:**
-- Consumes: `config.Load`, `config.Config.Validate`, `config.Config.ParaRoots`, `config.DefaultPath` (Task 2); `vault.DiscoverFolders` (Task 8)
+- Consumes: `config.Load`, `config.Config.Validate`, `config.Config.ParaRoots`, `config.DefaultPath` (Task 2)
 - Produces: `newDoctorCmd() *cobra.Command`, `newInitCmd() *cobra.Command`. Doctor exit codes: 0 = healthy, 1 = hard failure (config unloadable or vault dir invalid). Missing PARA roots and unresolvable LLM argv[0] are warnings, not failures.
 - Doctor demonstrates the flag>env precedence rule: `--vault` overrides the loaded config.
 

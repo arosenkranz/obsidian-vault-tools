@@ -12,6 +12,8 @@ help:
 	@echo "  config     Create $(CONFIG_DIR)/config from example if missing"
 	@echo "  check      Syntax-check the scripts"
 	@echo "  test       Run the pytest suite (tests/)"
+	@echo "  build      Build the Go binary to dist/ov2"
+	@echo "  gotest     Run the Go test suite"
 	@echo "  uninstall  unlink + leave config in place"
 	@echo ""
 	@echo "Variables:"

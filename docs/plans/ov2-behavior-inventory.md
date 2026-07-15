@@ -94,10 +94,10 @@ stable — later additions append, never renumber.
 | 82 | triage_llm.py:39-49 vs vault.sh:25,1082-1084 | python reader recognizes only 9 keys — OV_DOCS_HOST/PATH/URL invisible to it while bash sources everything; the two v1 config readers disagree on the key inventory | BUG | fixed: v2 single 12-key inventory including docs keys (config.go, TestLoadDefaultsOnly) |
 | 83 | triage_llm.py:79-85 | config precedence per key: env > file > built-in default | CONTRACT | ported (config_test.go:54 TestEnvBeatsFile) |
 | 84 | triage_llm.py:108 | FM_RE closing-fence match: an inner line starting `----` gets its first 3 dashes consumed as the closing fence — frontmatter splits lossily, the 4th dash leaks into the body | DECIDE | v2 diverges deliberately: ParseNote treats it as no-frontmatter (round-trip-safe) — safer than silent corruption |
-| 85 | triage_llm.py:111-136 | lenient read view: blank/# lines skipped, first ":" splits key/value, surrounding quotes stripped, `[a, b]` → list, `[]` → empty list | CONTRACT | frontmatter_test.go:36 TestLenientView |
+| 85 | triage_llm.py:111-136 | lenient read view: blank/# lines skipped, first ":" splits key/value, surrounding quotes stripped, `[a, b]` → list, `[]` → empty list | CONTRACT | frontmatter_test.go:36 TestLenientView; two deliberate Go divergences recorded as #121-122 |
 | 86 | triage_llm.py:139-162 | render_frontmatter imposes preferred key order and re-renders values — quoting/comments/order lost even when nothing was edited | BUG | v2 no-op round-trip is byte-identical (frontmatter_test.go:6 TestRoundTripByteIdentical; review blocker F6/m5) |
 | 87 | triage_llm.py:169-184 | folder discovery: each PARA root + subdirs to depth 2, sorted, missing roots skipped, plain files ignored | CONTRACT | discover_test.go:10 TestDiscoverFolders |
-| 88 | triage_llm.py:177-182 | Path.is_dir() follows symlinks — a symlinked subdirectory is listed and recursed; Go's DirEntry.IsDir() does not at sub-levels | DECIDE | resolved: v2 does NOT follow symlinked subdirs — avoids walk cycles and vault-escaping triage targets; a symlinked PARA folder must be a real directory to be offered. Divergence accepted. |
+| 88 | triage_llm.py:177-182 | Path.is_dir() follows symlinks — a symlinked subdirectory is listed and recursed; Go's DirEntry.IsDir() does not at sub-levels | DECIDE | resolved (scope: subdirectories only): symlinked PARA *roots* ARE followed — DiscoverFolders checks roots with os.Stat, which resolves symlinks; only symlinked *subdirectories* are excluded (DirEntry.IsDir does not follow). Avoids walk cycles and vault-escaping triage targets below a root. Divergence accepted. |
 | 89 | triage_llm.py:254-258 | OV_LLM_CMD shlex-split into argv — never a shell; --model appended when set; prompt delivered on stdin | CONTRACT | ported (phase 3 llm runner); also the model for fixing #72 |
 | 90 | triage_llm.py:259-275 | LLM failure modes: missing binary → clean error; timeout 120s (180s for cleanup, moc_cleanup.py:272); non-zero exit → error including stderr; stdout returned only on success | CONTRACT | ported |
 | 91 | triage_llm.py:214-241 | proposal schema fields: to / from / new_title / frontmatter_patch / links_to_add / body_patch / confidence / rationale; v1 pins links_to_add=[] and body_patch=null; "to" restricted to listed existing folders; created/modified excluded from patch; confidence ∈ high/medium/low | CONTRACT | phase 3 prompt builder keeps the schema; v2 Validate enforces the pins (#5) |
@@ -130,6 +130,8 @@ stable — later additions append, never renumber.
 | 118 | render_html.py:291-304 | regeneration splices ONLY between RENDER_BODY_START/END markers; everything outside is preserved; missing markers → skip with warning | CONTRACT | phase 4 |
 | 119 | render_html.py:298,306-314 | RENDER_TIMESTAMP comment updated in place, or inserted immediately after RENDER_SOURCE on first render | CONTRACT | phase 4 |
 | 120 | render_html.py:301-304 | body injected via re.sub with generated HTML as the replacement TEMPLATE — literal `\1`/`\g` sequences in note content are interpreted as group references (corruption or exception) | BUG | v2 splices by index/string concatenation, never a regex replacement template |
+| 121 | triage_llm.py:120-126 | lenient view parses ANY line containing ":" as a key — an indented continuation line like `  owner: alex` under a nested map becomes the top-level key `owner` | DECIDE(v2 safer) | v2 keyLine requires zero indent: indented `key: value` continuation lines are opaque — never read, patched, or deleted as keys |
+| 122 | triage_llm.py:128-134 | quotes stripped BEFORE list detection: `tags: "[a, b]"` loses its quotes and then parses as the list [a, b] | DECIDE(v2 safer) | v2 detects the list shape first, strips quotes after: a quoted `"[a, b]"` stays the string the author wrote |
 
 ## Cross-check: phase 0 test tags → rows
 
@@ -170,7 +172,7 @@ unpublish_doc #68,69,76,77 · render dispatch #79,117-120 · main dispatch
 #78-80
 
 **triage_llm.py** — load_config #11,81-83 · color #93 · split_frontmatter
-#4,84,85 · render_frontmatter #86 · _fm_line #93 · discover_folders #87,88 ·
+#4,84,85,121,122 · render_frontmatter #86 · _fm_line #93 · discover_folders #87,88 ·
 slugify_title #3,20-25 · call_llm #89,90 · extract_json #92 · show_note #93 ·
 show_proposal #93 (and the #5 display gap) · extract_moc_name_from_frontmatter
 #4 · _resolve_moc_path #95 · sync_moc_link_after_rename #94 ·
