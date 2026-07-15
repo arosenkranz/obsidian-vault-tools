@@ -66,3 +66,13 @@ func TestRenderTOML(t *testing.T) {
 }
 
 func tomlUnmarshalForTest(b []byte, v any) error { return toml.Unmarshal(b, v) }
+
+// Invariant: every env field renders to a TOML key — a missing envToTOML
+// entry would make RenderTOML emit a nameless ` = "value"` line.
+func TestEnvToTOMLCoversAllEnvFields(t *testing.T) {
+	for _, f := range envFields {
+		if envToTOML[f.env] == "" {
+			t.Errorf("envToTOML has no TOML key for %s", f.env)
+		}
+	}
+}

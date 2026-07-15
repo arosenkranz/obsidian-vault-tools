@@ -15,14 +15,18 @@ func TestLoadDefaultsOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("missing file must not error: %v", err)
 	}
-	want := map[string]string{
-		cfg.Inbox: "00-Inbox", cfg.Projects: "01-Projects", cfg.Areas: "02-Areas",
-		cfg.Resources: "03-Resources", cfg.Archive: "04-Archive", cfg.Meta: "99-Meta",
-		cfg.LLMCmd: "claude --print", cfg.DocsPath: "/var/www/docs",
-	}
-	for got, expected := range want {
-		if got != expected {
-			t.Errorf("default mismatch: got %q want %q", got, expected)
+	for _, row := range []struct{ name, got, want string }{
+		{"Inbox", cfg.Inbox, "00-Inbox"},
+		{"Projects", cfg.Projects, "01-Projects"},
+		{"Areas", cfg.Areas, "02-Areas"},
+		{"Resources", cfg.Resources, "03-Resources"},
+		{"Archive", cfg.Archive, "04-Archive"},
+		{"Meta", cfg.Meta, "99-Meta"},
+		{"LLMCmd", cfg.LLMCmd, "claude --print"},
+		{"DocsPath", cfg.DocsPath, "/var/www/docs"},
+	} {
+		if row.got != row.want {
+			t.Errorf("%s default: got %q want %q", row.name, row.got, row.want)
 		}
 	}
 	if cfg.VaultDir != "" || cfg.Model != "" || cfg.DocsHost != "" || cfg.DocsURL != "" {

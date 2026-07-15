@@ -117,6 +117,10 @@ func expandPath(p string) string {
 	return os.ExpandEnv(p)
 }
 
+// ExpandPath applies the same ~/$VAR expansion Load gives VaultDir. For
+// cmd-layer flag values (e.g. --vault), which bypass Load's expansion.
+func ExpandPath(p string) string { return expandPath(p) }
+
 func (c *Config) Validate() error {
 	if c.VaultDir == "" {
 		return errors.New("OV_VAULT_DIR not set: create " + DefaultPath() + " (ov2 init) or export OV_VAULT_DIR")
