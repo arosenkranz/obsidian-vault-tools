@@ -7,7 +7,7 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-// The regex contract is mined from triage_llm.py _CONFIG_LINE_RE (line 62):
+// CONTRACT: legacy config line regex mined from triage_llm.py _CONFIG_LINE_RE (line 62):
 // optional whitespace, OV_ key, =, optional quotes, value, optional # comment.
 func TestParseLegacy(t *testing.T) {
 	input := `
