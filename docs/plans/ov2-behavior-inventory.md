@@ -132,6 +132,11 @@ stable — later additions append, never renumber.
 | 120 | render_html.py:301-304 | body injected via re.sub with generated HTML as the replacement TEMPLATE — literal `\1`/`\g` sequences in note content are interpreted as group references (corruption or exception) | BUG | v2 splices by index/string concatenation, never a regex replacement template |
 | 121 | triage_llm.py:120-126 | lenient view parses ANY line containing ":" as a key — an indented continuation line like `  owner: alex` under a nested map becomes the top-level key `owner` | DECIDE(v2 safer) | v2 keyLine requires zero indent: indented `key: value` continuation lines are opaque — never read, patched, or deleted as keys |
 | 122 | triage_llm.py:128-134 | quotes stripped BEFORE list detection: `tags: "[a, b]"` loses its quotes and then parses as the list [a, b] | DECIDE(v2 safer) | v2 detects the list shape first, strips quotes after: a quoted `"[a, b]"` stays the string the author wrote |
+| 123 | design spec §CLI/TUI; phase 1 | v1 read commands print colored, decorated output entirely to stdout | DECIDE | v2 read-only commands split streams: machine-readable records → stdout (plain, no ANSI); chrome (headers, counts, empty-state, hints) → stderr; pipe-safe. No ANSI color/emoji on stdout in phase 1 |
+| 124 | vault.sh:867 vs 742 | review inbox COUNT uses recursive `find` while `inbox` list uses a top-level glob — the two counts can disagree | DECIDE | unified: review inbox count = `vault.ListInbox` (top-level *.md), same source as `ov2 inbox` |
+| 125 | vault.sh:872-875 | review "modified this week" takes `head -10` of unstable `find` order | DECIDE | v2 `ModifiedWithin` sorts ModTime desc, then Name asc; the command caps at 10 — deterministic |
+| 126 | vault.sh:993 | orphan match was a case-sensitive substring `grep` | DECIDE | v2 keys wikilink targets and note names by NFC + case-folded basename (Obsidian-style resolution); backs the row #1/#2 reimplementation |
+| 127 | vault.sh:880-887 | review lists Projects children with 📁 (dir) / 📄 (file) glyphs | DECIDE | glyph distinction is decoration; v2 machine record emits `project\t<name>` for dirs and files alike |
 
 ## Cross-check: phase 0 test tags → rows
 
