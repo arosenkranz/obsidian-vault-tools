@@ -1,5 +1,5 @@
 # Defensive — config should live in ~/.config/ov/, never inside the repo.
-config
+/config
 *.config
 config.local
 .env

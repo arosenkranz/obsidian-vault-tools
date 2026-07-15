@@ -2,7 +2,7 @@ PREFIX     ?= $(HOME)/.local
 BIN_DIR    ?= $(PREFIX)/bin
 CONFIG_DIR ?= $(HOME)/.config/ov
 
-.PHONY: help install uninstall link unlink config check test
+.PHONY: help install uninstall link unlink config check test build gotest
 
 help:
 	@echo "Targets:"
@@ -12,6 +12,8 @@ help:
 	@echo "  config     Create $(CONFIG_DIR)/config from example if missing"
 	@echo "  check      Syntax-check the scripts"
 	@echo "  test       Run the pytest suite (tests/)"
+	@echo "  build      Build the Go binary to dist/ov2"
+	@echo "  gotest     Run the Go test suite"
 	@echo "  uninstall  unlink + leave config in place"
 	@echo ""
 	@echo "Variables:"
@@ -53,3 +55,11 @@ test:
 
 uninstall: unlink
 	@echo "Config at $(CONFIG_DIR) left in place. Remove manually if desired."
+
+build:
+	@mkdir -p dist
+	go build -o dist/ov2 ./cmd/ov
+	@echo "✓ Built dist/ov2"
+
+gotest:
+	go test ./...

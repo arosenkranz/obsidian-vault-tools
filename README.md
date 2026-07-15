@@ -55,6 +55,13 @@ Two sync mechanisms, two clean responsibilities:
 
 Per-machine config lives at `~/.config/ov/config` and points at your vault. See [docs/architecture.md](docs/architecture.md) for the full story.
 
+## v2 (Go) — in progress
+
+A Go rewrite is underway on the `ov-v2-design` line: see
+[docs/plans/2026-07-11-ov-v2-go-rewrite-design.md](docs/plans/2026-07-11-ov-v2-go-rewrite-design.md).
+The transitional binary is `ov2` (`make build` → `dist/ov2`); the bash/python
+`ov` remains authoritative until cutover.
+
 ## Requirements
 
 - macOS or Linux (bash, Python 3.9+)

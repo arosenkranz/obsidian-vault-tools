@@ -101,6 +101,35 @@ def render_body(body: str) -> str:
             )
             continue
 
+        # Markdown table: header row followed by a |---|---| separator row.
+        # Cells split on unescaped pipes; \| inside a cell is a literal pipe.
+        if line.lstrip().startswith("|") and i + 1 < len(lines) and re.match(
+            r"^\s*\|[\s:|-]+\|\s*$", lines[i + 1]
+        ):
+            close_list()
+
+            def cells(row: str) -> list[str]:
+                row = row.strip().strip("|")
+                parts = re.split(r"(?<!\\)\|", row)
+                return [p.strip().replace("\\|", "|") for p in parts]
+
+            header = cells(line)
+            i += 2  # skip header + separator rows
+            rows = []
+            while i < len(lines) and lines[i].lstrip().startswith("|"):
+                rows.append(cells(lines[i]))
+                i += 1
+            thead = "".join(f"<th>{md_inline(c)}</th>" for c in header)
+            tbody = "".join(
+                "<tr>" + "".join(f"<td>{md_inline(c)}</td>" for c in row) + "</tr>"
+                for row in rows
+            )
+            out.append(
+                f'<table class="md-table"><thead><tr>{thead}</tr></thead>'
+                f"<tbody>{tbody}</tbody></table>"
+            )
+            continue
+
         # Checklist step heading: - [ ] **Step N: ...**
         step_match = re.match(r"^- \[ \] \*\*(.+?)\*\*\s*$", line)
         if step_match:
@@ -274,6 +303,17 @@ def build_html(slides: list[dict], plan_title: str, plan_source: str) -> str:
   pre.code code {{
     background: none; padding: 0; font-size: 13px; line-height: 1.5;
     font-family: "SF Mono", Menlo, Consolas, monospace; white-space: pre;
+  }}
+  .slide table.md-table {{
+    border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13.5px;
+  }}
+  .slide table.md-table th, .slide table.md-table td {{
+    border: 1px solid var(--border); padding: 7px 10px; text-align: left;
+    vertical-align: top; line-height: 1.45;
+  }}
+  .slide table.md-table th {{
+    background: var(--code-bg); color: var(--accent); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.06em;
   }}
   .step {{
     margin: 16px 0 4px; font-weight: 600; font-size: 14px;
