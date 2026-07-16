@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sync"
 	"testing"
@@ -14,7 +16,10 @@ import (
 // DECIDE(#133): the bind guard runs before the listener opens — an
 // unauthorized bind never touches the network.
 func TestServeBindGuardRejectsNonLoopback(t *testing.T) {
-	newVaultFixture(t)
+	vaultDir := newVaultFixture(t)
+	if err := os.WriteFile(filepath.Join(vaultDir, "AGENTS.md"), []byte("test contract"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	_, _, err := runCmd(t, "serve", "--bind", "0.0.0.0:0")
 	if err == nil {
 		t.Fatal("expected the bind guard to refuse 0.0.0.0 without --allow-nonlocal-bind")
@@ -68,7 +73,10 @@ func waitForListenAddr(t *testing.T, buf *syncBuffer, timeout time.Duration) str
 // nil, which passes even for a no-op Serve since a buffered channel absorbs
 // the near-instant result before the 200ms sleep elapses).
 func TestServeStartsAndStopsOnLoopback(t *testing.T) {
-	newVaultFixture(t)
+	vaultDir := newVaultFixture(t)
+	if err := os.WriteFile(filepath.Join(vaultDir, "AGENTS.md"), []byte("test contract"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	root := newRootCmd()
 	ctx, cancel := context.WithCancel(context.Background())
 	root.SetArgs([]string{"serve", "--bind", "127.0.0.1:0"})
