@@ -183,3 +183,58 @@ func TestRenameMOCLinkNoFrontmatter(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// CONTRACT(#66): inserting under an existing "## Key Notes" heading
+// places the entry immediately below it, with NO blank-line separator
+// (v1's `sed -i "/## Key Notes/a\..."` inserts directly) — unlike
+// AppendMOCEntry's blank-line spacer.
+func TestInsertUnderHeadingExistingHeading(t *testing.T) {
+	content := "# MOC Music\n\n## Key Notes\n- [[Old]]\n"
+	got := InsertUnderHeading(content, "## Key Notes", "- [[New]]")
+	want := "# MOC Music\n\n## Key Notes\n- [[New]]\n- [[Old]]\n"
+	if got != want {
+		t.Errorf("InsertUnderHeading =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// CONTRACT(#66): a missing heading appends at EOF and does NOT create
+// the heading — unlike AppendMOCEntry's create-on-miss behavior.
+func TestInsertUnderHeadingMissingHeadingAppendsAtEOF(t *testing.T) {
+	content := "# MOC Music\n\n## Resources\n- [[Foo]]\n"
+	got := InsertUnderHeading(content, "## Key Notes", "- [[New]]")
+	want := "# MOC Music\n\n## Resources\n- [[Foo]]\n- [[New]]\n"
+	if got != want {
+		t.Errorf("InsertUnderHeading =\n%q\nwant\n%q", got, want)
+	}
+	if strings.Contains(got, "## Key Notes") {
+		t.Error("InsertUnderHeading must never create the missing heading (row #66)")
+	}
+}
+
+// CONTRACT: AppendMOCEntry's behavior is unchanged by the
+// insertAfterHeading refactor (regression guard against Step 3).
+func TestAppendMOCEntryStillBlankLineSeparated(t *testing.T) {
+	content := "# MOC Music\n\n## 🔗 Recent Additions\n- [[Old]]\n"
+	got := AppendMOCEntry(content, "New", "snip")
+	want := "# MOC Music\n\n## 🔗 Recent Additions\n\n- [[New]] — snip\n- [[Old]]\n"
+	if got != want {
+		t.Errorf("AppendMOCEntry regressed:\n%q\nwant\n%q", got, want)
+	}
+}
+
+// BUG(fixed)(#155): CR/LF and "[" "]" are stripped from caller-supplied
+// wikilink display text before interpolation — a name containing a
+// newline can no longer inject extra lines into the MOC, and "[" "]"
+// can no longer malform the wikilink boundary.
+func TestSanitizeWikilinkText(t *testing.T) {
+	got := SanitizeWikilinkText("Evil]]\n\n## Injected\nName[[x")
+	if strings.ContainsAny(got, "\r\n[]") {
+		t.Errorf("SanitizeWikilinkText left unsafe chars: %q", got)
+	}
+}
+
+func TestSanitizeWikilinkTextLeavesNormalTitleUnchanged(t *testing.T) {
+	if got := SanitizeWikilinkText("My Great Note"); got != "My Great Note" {
+		t.Errorf("SanitizeWikilinkText = %q", got)
+	}
+}

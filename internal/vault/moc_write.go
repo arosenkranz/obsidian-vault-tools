@@ -8,6 +8,29 @@ import (
 	"strings"
 )
 
+// insertAfterHeading finds a line exactly equal to heading and inserts
+// extraLines immediately after it, returning the modified content and
+// true. If no line matches heading, returns content unchanged and
+// false. Shared splice primitive behind AppendMOCEntry (creates its
+// heading if missing, blank-line-separated, rows #8/#41/#42) and
+// InsertUnderHeading (never creates its heading, no blank-line
+// separator, row #66) — the two callers' exact create/spacing semantics
+// differ, so only the line-splice mechanics are shared, never the
+// heading-miss fallback.
+func insertAfterHeading(content, heading string, extraLines ...string) (string, bool) {
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		if line == heading {
+			out := make([]string, 0, len(lines)+len(extraLines))
+			out = append(out, lines[:i+1]...)
+			out = append(out, extraLines...)
+			out = append(out, lines[i+1:]...)
+			return strings.Join(out, "\n"), true
+		}
+	}
+	return content, false
+}
+
 // AppendMOCEntry inserts "- [[title]] — snippet" into content under the
 // "## 🔗 Recent Additions" heading, creating that heading (with a leading
 // blank line) at EOF if content has no such heading yet. Placement is the v2
@@ -17,18 +40,37 @@ import (
 func AppendMOCEntry(content, title, snippet string) string {
 	const heading = "## 🔗 Recent Additions"
 	entry := "- [[" + title + "]] — " + snippet
-	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		if line == heading {
-			out := make([]string, 0, len(lines)+2)
-			out = append(out, lines[:i+1]...)
-			out = append(out, "", entry)
-			out = append(out, lines[i+1:]...)
-			return strings.Join(out, "\n")
-		}
+	if out, ok := insertAfterHeading(content, heading, "", entry); ok {
+		return out
 	}
 	trimmed := strings.TrimRight(content, "\n")
 	return trimmed + "\n\n" + heading + "\n" + entry + "\n"
+}
+
+// InsertUnderHeading inserts entry immediately below the line matching
+// heading (no blank-line separator), or appends entry at EOF, unchanged,
+// when heading is missing — heading itself is NEVER created (unlike
+// AppendMOCEntry, row #8/#41/#42's simplification). Ports v1 mocs_add's
+// exact insertion semantics: `sed -i "/## Key Notes/a\- [[$note_name]]"`
+// when the heading exists, else a plain `>>` append (behavior inventory
+// row #66). Pure text transform — the caller re-reads, re-hashes, and
+// writes via WriteNoteAtomic, same as AppendMOCEntry/RenameMOCLink.
+func InsertUnderHeading(content, heading, entry string) string {
+	if out, ok := insertAfterHeading(content, heading, entry); ok {
+		return out
+	}
+	trimmed := strings.TrimRight(content, "\n")
+	return trimmed + "\n" + entry + "\n"
+}
+
+// SanitizeWikilinkText strips characters that would corrupt a "[[text]]"
+// wikilink or inject additional lines when text is caller-supplied free
+// text never validated against a real note (mocs add's <note-name>, row
+// #66/#155): CR/LF (line injection into the MOC file, same defense-in-
+// depth class as row #142's frontmatter tag sanitization) and "[" / "]"
+// (would prematurely close or malform the wikilink boundary).
+func SanitizeWikilinkText(s string) string {
+	return strings.NewReplacer("\r", "", "\n", "", "[", "", "]", "").Replace(s)
 }
 
 // FindMOCByName resolves a MOC by name: accepts "Music" or "MOC Music"
