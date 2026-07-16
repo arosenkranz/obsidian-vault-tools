@@ -88,6 +88,19 @@ func TestFindMOCByNameNotFound(t *testing.T) {
 	}
 }
 
+// BUG(fixed)(#140): a name containing a path separator is rejected
+// outright rather than reaching filepath.Join, closing a traversal read
+// primitive.
+func TestFindMOCByNameRejectsPathSeparator(t *testing.T) {
+	vaultDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vaultDir, "03-Resources"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FindMOCByName(vaultDir, "03-Resources", "../../../etc/passwd"); err == nil {
+		t.Fatal("expected rejection of a name containing a path separator")
+	}
+}
+
 // CONTRACT(#33): a vault-wide match outside Resources is still found.
 func TestFindMOCByNameVaultWideFallback(t *testing.T) {
 	vaultDir := t.TempDir()

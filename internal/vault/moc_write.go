@@ -36,8 +36,16 @@ func AppendMOCEntry(content, title, snippet string) string {
 // literal "MOC " prefix is stripped if present, otherwise the name is used
 // as-is). Preference: an exact "MOC <bare-name>.md" directly in
 // resourcesDir; then the first vault-wide match by sorted path. Behavior
-// inventory row #33.
+// inventory row #33. A name containing a path separator is rejected
+// outright (never a legitimate MOC name) rather than passed into
+// filepath.Join, which would otherwise resolve an embedded "../" and let a
+// crafted --moc/web-form value read a file outside resourcesDir/vaultDir
+// (row #6/#130 containment posture, applied here defensively even though
+// this path is read-only today).
 func FindMOCByName(vaultDir, resourcesDir, name string) (*MOC, error) {
+	if strings.ContainsAny(name, "/\\") {
+		return nil, fmt.Errorf("MOC not found: %s", name)
+	}
 	bare := strings.TrimPrefix(name, "MOC ")
 	target := "MOC " + bare + ".md"
 

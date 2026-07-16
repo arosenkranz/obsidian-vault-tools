@@ -149,6 +149,7 @@ stable — later additions append, never renumber.
 | 137 | vault.sh:661-667 | v1 collision probe is unbounded (`while [ -e ... ]; do n=$((n+1)); done`) — a pathological case never terminates | DECIDE(v2 safer) | v2 caps the collision suffix probe at a documented bound and returns an error rather than looping forever (phase 2) |
 | 138 | design spec §Web layer | no v1 equivalent | DECIDE(new in v2) | web inbox list (`GET /`) renders through the same `vault.ListInbox` query phase 1 already exposes via CLI — one source of truth, no separate web-only inbox query (phase 2) |
 | 139 | vault.sh:791 `mv "$file" "$dest_dir/"` | plain mv silently overwrites an existing same-name file in the destination folder | BUG | v2 triage move refuses when the destination already exists (mirrors row #99's existing-target refusal), surfacing a visible error instead of a silent overwrite (phase 2) |
+| 140 | vault.sh:221-256 `find_moc_by_name` (both v1 and the initial v2 port) | an unsanitized name embeds directly into a joined filesystem path — a crafted "../"-laden --moc/web-form value can traverse outside resourcesDir/vaultDir on the lookup (read-only today, but the looked-up MOC.Path is a future write target) | BUG | v2 FindMOCByName rejects any name containing a path separator outright before it ever reaches filepath.Join (found in phase 2 Task 1 review; row #6/#130 containment posture) |
 
 ## Cross-check: phase 0 test tags → rows
 
