@@ -158,3 +158,68 @@ func TestValidateHandlesSymlinkedVaultDir(t *testing.T) {
 		t.Errorf("Validate() = %v, want nil (a symlinked VaultDir must not cause a spurious ErrTargetNotParaRoot)", err)
 	}
 }
+
+// BUG(fixed)(row #152): frontmatter_patch is fully LLM-controlled JSON
+// written straight to disk via vault.Frontmatter.Set with zero newline
+// sanitization. A value like "ok\n---\n# Injected\nattacker body"
+// prematurely closes the frontmatter fence when rendered, turning
+// everything after the injected "---" into note BODY — a second,
+// unguarded channel to the exact outcome row #5's body_patch/
+// links_to_add rejection exists to prevent.
+func TestValidateRejectsFrontmatterPatchNewlineInValue(t *testing.T) {
+	cfg := testConfig(t)
+	p := validProposal()
+	p.FrontmatterPatch = map[string]any{
+		"status": "ok\n---\n# Injected\nattacker body",
+	}
+	err := Validate(cfg, p)
+	if !errors.Is(err, ErrFrontmatterPatchInvalid) {
+		t.Fatalf("Validate() = %v, want ErrFrontmatterPatchInvalid", err)
+	}
+}
+
+// BUG(fixed)(row #152): the injection channel is not limited to values —
+// a key containing a newline is just as capable of corrupting the
+// rendered frontmatter block.
+func TestValidateRejectsFrontmatterPatchNewlineInKey(t *testing.T) {
+	cfg := testConfig(t)
+	p := validProposal()
+	p.FrontmatterPatch = map[string]any{
+		"status\n---\ninjected": "value",
+	}
+	err := Validate(cfg, p)
+	if !errors.Is(err, ErrFrontmatterPatchInvalid) {
+		t.Fatalf("Validate() = %v, want ErrFrontmatterPatchInvalid", err)
+	}
+}
+
+// BUG(fixed)(row #152): a value that is exactly "---" (no embedded
+// newline at all) is still rejected — rendered as a bare standalone
+// frontmatter line, it is itself a valid YAML/frontmatter fence marker
+// that corrupts the block.
+func TestValidateRejectsFrontmatterPatchBareFenceValue(t *testing.T) {
+	cfg := testConfig(t)
+	p := validProposal()
+	p.FrontmatterPatch = map[string]any{
+		"status": "---",
+	}
+	err := Validate(cfg, p)
+	if !errors.Is(err, ErrFrontmatterPatchInvalid) {
+		t.Fatalf("Validate() = %v, want ErrFrontmatterPatchInvalid", err)
+	}
+}
+
+// CONTRACT(row #152): the fix must have no false positives — a
+// well-formed multi-key patch (the kind Propose's own decoded Proposal
+// would normally carry) still passes cleanly.
+func TestValidateAcceptsNormalFrontmatterPatch(t *testing.T) {
+	cfg := testConfig(t)
+	p := validProposal()
+	p.FrontmatterPatch = map[string]any{
+		"type": "note",
+		"tags": []any{"a", "b"},
+	}
+	if err := Validate(cfg, p); err != nil {
+		t.Errorf("Validate() = %v, want nil for a well-formed frontmatter_patch", err)
+	}
+}

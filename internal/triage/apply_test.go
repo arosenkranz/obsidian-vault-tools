@@ -232,3 +232,40 @@ func TestApplyNoMOCSyncWhenTitleUnchanged(t *testing.T) {
 		t.Errorf("MOC was modified despite an unchanged title: %s", got)
 	}
 }
+
+// BUG(fixed)(row #152): Apply refuses a frontmatter_patch injection even
+// if a caller forgot to call Validate first — the gate lives inside
+// Apply too (defense in depth), mirroring
+// TestApplyRefusesBodyPatchWithoutExternalValidate. frontmatter_patch is
+// fully LLM-controlled JSON that mergeFrontmatter/renderPatchValue write
+// straight to disk via vault.Frontmatter.Set with zero newline
+// sanitization; a value like "ok\n---\n# Injected\nattacker body" would
+// otherwise prematurely close the frontmatter fence and turn everything
+// after the injected "---" into unguarded note body.
+func TestApplyRefusesFrontmatterPatchInjectionEvenWithoutExternalValidate(t *testing.T) {
+	cfg := testConfig(t)
+	note := writeInboxNote(t, cfg, "x.md", "---\ntype: inbox\n---\noriginal body\n")
+	const payload = "ok\n---\n# Injected\nattacker body"
+	p := Proposal{
+		To:               "02-Areas/X.md",
+		NewTitle:         "X",
+		FrontmatterPatch: map[string]any{"status": payload},
+	}
+	_, err := Apply(cfg, note, p, fixedNow, false)
+	if !errors.Is(err, ErrFrontmatterPatchInvalid) {
+		t.Fatalf("err = %v, want ErrFrontmatterPatchInvalid", err)
+	}
+	if _, statErr := os.Stat(note.Path); statErr != nil {
+		t.Error("source note must remain untouched on rejection")
+	}
+	if _, statErr := os.Stat(filepath.Join(cfg.VaultDir, "02-Areas", "X.md")); !os.IsNotExist(statErr) {
+		t.Error("target must never be written when frontmatter_patch is rejected")
+	}
+	content, readErr := os.ReadFile(note.Path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if stringsContains(string(content), payload) {
+		t.Error("injected content must never reach disk")
+	}
+}
