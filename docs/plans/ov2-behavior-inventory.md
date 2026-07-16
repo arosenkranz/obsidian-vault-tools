@@ -148,6 +148,7 @@ stable — later additions append, never renumber.
 | 136 | design spec §CLI/TUI tty discipline, rows #9/#36 | no v1 equivalent for capture specifically — v1 bash always shows a picker when --moc is omitted, blocking on read even under cron/agent invocation | BUG | v2 capture's MOC picker only launches when stdin AND stdout are both an interactive tty; otherwise MOC selection is silently skipped (never blocks), matching row #39's non-fail semantics (phase 2) |
 | 137 | vault.sh:661-667 | v1 collision probe is unbounded (`while [ -e ... ]; do n=$((n+1)); done`) — a pathological case never terminates | DECIDE(v2 safer) | v2 caps the collision suffix probe at a documented bound and returns an error rather than looping forever (phase 2) |
 | 138 | design spec §Web layer | no v1 equivalent | DECIDE(new in v2) | web inbox list (`GET /`) renders through the same `vault.ListInbox` query phase 1 already exposes via CLI — one source of truth, no separate web-only inbox query (phase 2) |
+| 139 | vault.sh:791 `mv "$file" "$dest_dir/"` | plain mv silently overwrites an existing same-name file in the destination folder | BUG | v2 triage move refuses when the destination already exists (mirrors row #99's existing-target refusal), surfacing a visible error instead of a silent overwrite (phase 2) |
 
 ## Cross-check: phase 0 test tags → rows
 
