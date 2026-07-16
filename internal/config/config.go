@@ -13,18 +13,19 @@ import (
 )
 
 type Config struct {
-	VaultDir  string `toml:"vault_dir"`
-	Inbox     string `toml:"inbox"`
-	Projects  string `toml:"projects"`
-	Areas     string `toml:"areas"`
-	Resources string `toml:"resources"`
-	Archive   string `toml:"archive"`
-	Meta      string `toml:"meta"`
-	LLMCmd    string `toml:"llm_cmd"`
-	Model     string `toml:"model"`
-	DocsHost  string `toml:"docs_host"`
-	DocsPath  string `toml:"docs_path"`
-	DocsURL   string `toml:"docs_url"`
+	VaultDir     string   `toml:"vault_dir"`
+	Inbox        string   `toml:"inbox"`
+	Projects     string   `toml:"projects"`
+	Areas        string   `toml:"areas"`
+	Resources    string   `toml:"resources"`
+	Archive      string   `toml:"archive"`
+	Meta         string   `toml:"meta"`
+	LLMCmd       string   `toml:"llm_cmd"`
+	Model        string   `toml:"model"`
+	DocsHost     string   `toml:"docs_host"`
+	DocsPath     string   `toml:"docs_path"`
+	DocsURL      string   `toml:"docs_url"`
+	StaleExclude []string `toml:"stale_exclude"`
 }
 
 // envFields: the OV_* env contract (names frozen; design spec §contract) —
@@ -102,6 +103,9 @@ func Load(explicitPath string) (*Config, error) {
 		}
 	}
 
+	if cfg.StaleExclude == nil {
+		cfg.StaleExclude = []string{"Daily Notes"}
+	}
 	cfg.VaultDir = expandPath(cfg.VaultDir)
 	return cfg, nil
 }
