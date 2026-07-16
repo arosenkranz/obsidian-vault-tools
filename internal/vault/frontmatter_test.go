@@ -174,3 +174,39 @@ func TestNewFrontmatterGolden(t *testing.T) {
 		t.Errorf("golden mismatch:\ngot:  %q\nwant: %q", got, want)
 	}
 }
+
+// CONTRACT(#85): Pairs generalizes the already-ported lenient single-key
+// view (Get) to every top-level key at once — quotes stripped the same
+// way, comments and indented continuation lines invisible, same as
+// keyLine's zero-indent predicate. Read/display only (e.g. interpolating a
+// note's current frontmatter into the phase 3 LLM prompt); never used for
+// writes.
+func TestPairs(t *testing.T) {
+	content := "---\ntype: inbox\ncreated: 2026-05-14\nsource: \"cli\"\n# a comment\ntags:\n  - a\n  - b\n  bad: not a key\nmoc: [[MOC Music]]\n---\nbody\n"
+	fm, _ := ParseNote(content)
+	got := fm.Pairs()
+	want := map[string]string{
+		"type":    "inbox",
+		"created": "2026-05-14",
+		"source":  "cli",
+		"tags":    "",
+		"moc":     "[[MOC Music]]",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("Pairs() = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("Pairs()[%q] = %q, want %q", k, got[k], v)
+		}
+	}
+}
+
+// Nil-safe like every other Frontmatter method (TestNilFrontmatterSafe
+// companion).
+func TestPairsNilSafe(t *testing.T) {
+	var f *Frontmatter
+	if got := f.Pairs(); got != nil {
+		t.Errorf("Pairs() on nil = %v, want nil", got)
+	}
+}

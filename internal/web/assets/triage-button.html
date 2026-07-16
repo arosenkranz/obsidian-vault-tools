@@ -1,0 +1,5 @@
+{{define "triage-button.html"}}
+<div id="triage-{{.NoteEscaped}}">
+  <button hx-post="/triage/{{.NoteEscaped}}/propose" hx-target="#triage-{{.NoteEscaped}}" hx-swap="outerHTML">Triage</button>
+</div>
+{{end}}

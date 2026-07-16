@@ -79,3 +79,27 @@ func mocAt(vaultDir, p string) (*MOC, error) {
 		ItemCount:   len(ParseWikilinks(body)),
 	}, nil
 }
+
+// RenameMOCLink replaces every "[[oldTitle]]" wikilink in content's BODY
+// (never its frontmatter block) with "[[newTitle]]". Pure text transform,
+// same shape as AppendMOCEntry — the caller re-reads, re-hashes, and
+// writes via WriteNoteAtomic. Returns the (possibly unchanged) content and
+// whether a rename was made. Ports triage_llm.py update_moc_entry_title
+// (row #96): intentionally narrow and mechanical — it only fixes entry
+// text after a triage rename, never reorders/dedupes/reorganizes a MOC
+// (that's `ov mocs cleanup`, phase 4, LLM-assisted and human-approved).
+func RenameMOCLink(content, oldTitle, newTitle string) (string, bool) {
+	if oldTitle == newTitle {
+		return content, false
+	}
+	fm, body := ParseNote(content)
+	target := "[[" + oldTitle + "]]"
+	if !strings.Contains(body, target) {
+		return content, false
+	}
+	newBody := strings.ReplaceAll(body, target, "[["+newTitle+"]]")
+	if fm == nil {
+		return newBody, true
+	}
+	return fm.Render() + newBody, true
+}

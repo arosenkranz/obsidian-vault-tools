@@ -154,3 +154,40 @@ func (f *Frontmatter) Delete(key string) {
 		f.lines = append(f.lines[:i], f.lines[f.blockEnd(i):]...)
 	}
 }
+
+// Pairs returns every top-level (zero-indent) declaring key with its raw
+// lenient-view value (quotes stripped, same rule as Get), in no particular
+// order. A block-style value's own continuation lines (e.g. `tags:`
+// followed by indented `- a` items) contribute no value for that key — the
+// declaring line's raw suffix after the colon is used as-is (typically
+// empty for a pure block list), matching Get/rawValue's behavior on that
+// same key. Read/display only: this generalizes the already-ported
+// lenient view (row #85) to every key at once for interpolating a note's
+// current frontmatter into the phase 3 LLM prompt (internal/triage);
+// never used for writes, which stay via Set/Delete's patch-in-place
+// semantics (design spec's lossless-frontmatter contract).
+func (f *Frontmatter) Pairs() map[string]string {
+	if f == nil {
+		return nil
+	}
+	out := make(map[string]string)
+	for _, line := range f.lines {
+		if strings.HasPrefix(line, "#") || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		key := strings.TrimSpace(k)
+		if key == "" {
+			continue
+		}
+		val := strings.TrimSpace(v)
+		if len(val) >= 2 && ((val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'')) {
+			val = val[1 : len(val)-1]
+		}
+		out[key] = val
+	}
+	return out
+}

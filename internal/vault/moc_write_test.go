@@ -4,6 +4,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -117,5 +118,68 @@ func TestFindMOCByNameVaultWideFallback(t *testing.T) {
 	}
 	if got.Name != "MOC Old" {
 		t.Errorf("Name = %q", got.Name)
+	}
+}
+
+// CONTRACT(#96): RenameMOCLink replaces every [[old]] with [[new]] in the
+// MOC body only; frontmatter untouched (ported from triage_llm.py
+// update_moc_entry_title, tests/test_triage_llm.py:45-104).
+func TestRenameMOCLinkReplacesInBody(t *testing.T) {
+	content := "---\ntype: moc\n---\n# MOC Music\n\n- [[Old Song]] — a tune\n- [[Other]] — unrelated\n"
+	got, changed := RenameMOCLink(content, "Old Song", "New Song")
+	if !changed {
+		t.Fatal("expected a change")
+	}
+	want := "---\ntype: moc\n---\n# MOC Music\n\n- [[New Song]] — a tune\n- [[Other]] — unrelated\n"
+	if got != want {
+		t.Errorf("RenameMOCLink =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// CONTRACT(#96): the frontmatter block is never touched even if it happens
+// to contain the literal wikilink text.
+func TestRenameMOCLinkNeverTouchesFrontmatter(t *testing.T) {
+	content := "---\nmoc: [[Old Song]]\n---\nbody has [[Old Song]] here\n"
+	got, changed := RenameMOCLink(content, "Old Song", "New Song")
+	if !changed {
+		t.Fatal("expected a change")
+	}
+	if !strings.Contains(got, "moc: [[Old Song]]") {
+		t.Errorf("frontmatter was modified: %q", got)
+	}
+	if !strings.Contains(got, "body has [[New Song]] here") {
+		t.Errorf("body was not renamed: %q", got)
+	}
+}
+
+// CONTRACT(#96): old==new is a no-op (mirrors v1's early return).
+func TestRenameMOCLinkNoOpSameTitle(t *testing.T) {
+	content := "# MOC Music\n\n- [[Same]] — x\n"
+	got, changed := RenameMOCLink(content, "Same", "Same")
+	if changed || got != content {
+		t.Errorf("expected no-op, got changed=%v content=%q", changed, got)
+	}
+}
+
+// CONTRACT(#96): no matching entry -> no-op, changed=false (the note may
+// not actually be linked from this MOC — caller reports a warning, never
+// an error, per row #94).
+func TestRenameMOCLinkNoMatch(t *testing.T) {
+	content := "# MOC Music\n\n- [[Unrelated]] — x\n"
+	got, changed := RenameMOCLink(content, "Missing", "New")
+	if changed || got != content {
+		t.Errorf("expected no-op, got changed=%v content=%q", changed, got)
+	}
+}
+
+// A note with no frontmatter block still renames correctly.
+func TestRenameMOCLinkNoFrontmatter(t *testing.T) {
+	content := "# MOC Music\n\n- [[Old]] — x\n"
+	got, changed := RenameMOCLink(content, "Old", "New")
+	if !changed {
+		t.Fatal("expected a change")
+	}
+	if got != "# MOC Music\n\n- [[New]] — x\n" {
+		t.Errorf("got %q", got)
 	}
 }

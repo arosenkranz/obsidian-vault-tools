@@ -14,7 +14,7 @@ import (
 
 func TestHandleInboxEmpty(t *testing.T) {
 	_, cfg := newTestVault(t)
-	srv := New(cfg, stubFetcher{}, nil)
+	srv := New(cfg, stubFetcher{}, &fakeLLMRunner{}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = cfg.Bind
 	rec := httptest.NewRecorder()
@@ -34,7 +34,7 @@ func TestHandleInboxListsNotes(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(vaultDir, "00-Inbox", "2026-07-15 0800 Foo.md"), []byte("# Foo\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	srv := New(cfg, stubFetcher{}, nil)
+	srv := New(cfg, stubFetcher{}, &fakeLLMRunner{}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = cfg.Bind
 	rec := httptest.NewRecorder()
@@ -48,7 +48,7 @@ func TestHandleInboxListsNotes(t *testing.T) {
 // web capture handler writes a real note.
 func TestHandleCaptureSubmitWritesNote(t *testing.T) {
 	vaultDir, cfg := newTestVault(t)
-	srv := New(cfg, stubFetcher{}, func() time.Time { return time.Date(2026, 7, 15, 8, 30, 0, 0, time.UTC) })
+	srv := New(cfg, stubFetcher{}, &fakeLLMRunner{}, func() time.Time { return time.Date(2026, 7, 15, 8, 30, 0, 0, time.UTC) })
 	form := url.Values{"title": {"Web Capture"}, "body": {"hello from web"}}
 	req := httptest.NewRequest(http.MethodPost, "/capture", strings.NewReader(form.Encode()))
 	req.Host = cfg.Bind
@@ -70,7 +70,7 @@ func TestHandleCaptureSubmitWritesNote(t *testing.T) {
 // CONTRACT(#135): the opt-in checkbox triggers a title fetch.
 func TestHandleCaptureSubmitFetchTitleOptIn(t *testing.T) {
 	vaultDir, cfg := newTestVault(t)
-	srv := New(cfg, stubFetcher{title: "Fetched Title"}, func() time.Time { return time.Date(2026, 7, 15, 8, 30, 0, 0, time.UTC) })
+	srv := New(cfg, stubFetcher{title: "Fetched Title"}, &fakeLLMRunner{}, func() time.Time { return time.Date(2026, 7, 15, 8, 30, 0, 0, time.UTC) })
 	form := url.Values{"body": {"https://example.com/article"}, "fetch_title": {"on"}}
 	req := httptest.NewRequest(http.MethodPost, "/capture", strings.NewReader(form.Encode()))
 	req.Host = cfg.Bind
@@ -87,7 +87,7 @@ func TestHandleCaptureSubmitFetchTitleOptIn(t *testing.T) {
 // for a bare-URL body.
 func TestHandleCaptureSubmitNeverAutoFetches(t *testing.T) {
 	vaultDir, cfg := newTestVault(t)
-	srv := New(cfg, stubFetcher{title: "Should Not Be Used"}, func() time.Time { return time.Date(2026, 7, 15, 8, 30, 0, 0, time.UTC) })
+	srv := New(cfg, stubFetcher{title: "Should Not Be Used"}, &fakeLLMRunner{}, func() time.Time { return time.Date(2026, 7, 15, 8, 30, 0, 0, time.UTC) })
 	form := url.Values{"body": {"https://example.com/article"}}
 	req := httptest.NewRequest(http.MethodPost, "/capture", strings.NewReader(form.Encode()))
 	req.Host = cfg.Bind
@@ -106,7 +106,7 @@ func TestHandleCaptureSubmitNeverAutoFetches(t *testing.T) {
 // DECIDE(#134, new in v2): Host-header validation.
 func TestHygieneRejectsWrongHost(t *testing.T) {
 	_, cfg := newTestVault(t)
-	srv := New(cfg, stubFetcher{}, nil)
+	srv := New(cfg, stubFetcher{}, &fakeLLMRunner{}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = "evil.example.com"
 	rec := httptest.NewRecorder()
@@ -119,7 +119,7 @@ func TestHygieneRejectsWrongHost(t *testing.T) {
 // DECIDE(#134): a cross-origin POST is rejected even with HX-Request set.
 func TestHygieneRejectsCrossOriginPost(t *testing.T) {
 	_, cfg := newTestVault(t)
-	srv := New(cfg, stubFetcher{}, nil)
+	srv := New(cfg, stubFetcher{}, &fakeLLMRunner{}, nil)
 	form := url.Values{"title": {"x"}, "body": {"y"}}
 	req := httptest.NewRequest(http.MethodPost, "/capture", strings.NewReader(form.Encode()))
 	req.Host = cfg.Bind
@@ -137,7 +137,7 @@ func TestHygieneRejectsCrossOriginPost(t *testing.T) {
 // drive-by form CSRF that CORS alone would not stop).
 func TestHygieneRejectsMissingHXRequestHeader(t *testing.T) {
 	_, cfg := newTestVault(t)
-	srv := New(cfg, stubFetcher{}, nil)
+	srv := New(cfg, stubFetcher{}, &fakeLLMRunner{}, nil)
 	form := url.Values{"title": {"x"}, "body": {"y"}}
 	req := httptest.NewRequest(http.MethodPost, "/capture", strings.NewReader(form.Encode()))
 	req.Host = cfg.Bind

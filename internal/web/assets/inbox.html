@@ -7,7 +7,7 @@
 <p><a href="/capture">Capture a note</a></p>
 {{if .Notes}}
 <ul>
-{{range .Notes}}<li>{{.Name}} — {{.Age}}d old</li>{{end}}
+{{range .Notes}}<li>{{.Name}} — {{.Age}}d old {{template "triage-button.html" .}}</li>{{end}}
 </ul>
 {{else}}
 <p>Inbox is empty.</p>

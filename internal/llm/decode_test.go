@@ -56,3 +56,27 @@ func TestExtractJSONNullIsNotFound(t *testing.T) {
 		}
 	}
 }
+
+// CONTRACT(#74): ExtractHTMLBlock returns the <html>...</html> block when
+// present (case-insensitive, dotall), else the raw response trimmed.
+// Consumed starting phase 4/5 (publish/render); defined now per design
+// spec so the decoder contract doesn't need revisiting later.
+func TestExtractHTMLBlock(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain block", "<html><body>hi</body></html>", "<html><body>hi</body></html>"},
+		{"with prose around it", "Sure!\n<HTML>\n<body>hi</body>\n</HTML>\ndone.", "<HTML>\n<body>hi</body>\n</HTML>"},
+		{"no html block", "just some markdown text", "just some markdown text"},
+		{"leading/trailing whitespace, no block", "  raw text  \n", "raw text"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := ExtractHTMLBlock(c.in); got != c.want {
+				t.Errorf("ExtractHTMLBlock(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}

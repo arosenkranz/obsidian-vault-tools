@@ -21,7 +21,14 @@ func newTestVault(t *testing.T) (vaultDir string, cfg Config) {
 			t.Fatal(err)
 		}
 	}
-	return vaultDir, Config{VaultDir: vaultDir, Inbox: "00-Inbox", Resources: "03-Resources", Bind: "127.0.0.1:4173"}
+	if err := os.WriteFile(filepath.Join(vaultDir, "AGENTS.md"), []byte("test AGENTS.md contract"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return vaultDir, Config{
+		VaultDir: vaultDir, Inbox: "00-Inbox", Resources: "03-Resources",
+		Projects: "01-Projects", Areas: "02-Areas", Archive: "04-Archive",
+		AgentsMD: "test AGENTS.md contract", Bind: "127.0.0.1:4173",
+	}
 }
 
 type stubFetcher struct {
@@ -34,4 +41,25 @@ func (f stubFetcher) FetchTitle(ctx context.Context, url string) (string, error)
 		return "", f.err
 	}
 	return f.title, nil
+}
+
+// fakeLLMRunner is an llmRunner used by every test in this package that
+// doesn't specifically exercise the real stub-subprocess path (Task 2's
+// pattern: fast fake for unit tests, real internal/llmtest stub for
+// integration tests proving the actual transport).
+type fakeLLMRunner struct {
+	response  string
+	err       error
+	healthErr error
+}
+
+func (f *fakeLLMRunner) Run(ctx context.Context, prompt string) (string, error) {
+	if f.err != nil {
+		return "", f.err
+	}
+	return f.response, nil
+}
+
+func (f *fakeLLMRunner) HealthCheck(ctx context.Context) error {
+	return f.healthErr
 }
