@@ -2,7 +2,6 @@
 package web
 
 import (
-	"context"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -65,7 +64,7 @@ func (s *Server) handleCaptureSubmit(w http.ResponseWriter, r *http.Request) {
 		FetchTitle: r.FormValue("fetch_title") == "on", // explicit opt-in checkbox, row #135 — never automatic
 	}
 	ccfg := capture.CaptureConfig{VaultDir: s.cfg.VaultDir, Inbox: s.cfg.Inbox, Resources: s.cfg.Resources}
-	result, err := capture.Capture(context.Background(), ccfg, req, s.fetcher, s.now())
+	result, err := capture.Capture(r.Context(), ccfg, req, s.fetcher, s.now())
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err != nil {
 		fmt.Fprintf(w, `<div class="error">Capture failed: %s</div>`, template.HTMLEscapeString(err.Error()))
