@@ -1,0 +1,18 @@
+{{define "capture.html"}}
+<!doctype html>
+<html>
+<head><title>ov2 — Capture</title><script src="/assets/htmx.min.js"></script></head>
+<body>
+<h1>Capture</h1>
+<form hx-post="/capture" hx-target="#result">
+  <p><label>Title <input type="text" name="title"></label></p>
+  <p><label>Body<br><textarea name="body" rows="8" cols="60" required></textarea></label></p>
+  <p><label>Tags <input type="text" name="tags" placeholder="a,b,c"></label></p>
+  <p><label>MOC <input type="text" name="moc"></label></p>
+  <p><label><input type="checkbox" name="fetch_title"> Fetch title from URL</label></p>
+  <button type="submit">Capture</button>
+</form>
+<div id="result"></div>
+</body>
+</html>
+{{end}}
