@@ -1,0 +1,6 @@
+{{define "triage-error.html"}}
+<div id="triage-{{.NoteEscaped}}" class="error">
+  LLM call failed: {{.Error}}
+  <button hx-post="/triage/{{.NoteEscaped}}/propose" hx-target="#triage-{{.NoteEscaped}}" hx-swap="outerHTML">Retry</button>
+</div>
+{{end}}

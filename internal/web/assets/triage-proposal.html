@@ -1,0 +1,10 @@
+{{define "triage-proposal.html"}}
+<div id="triage-{{.NoteEscaped}}" class="triage-proposal">
+  <p>&#8594; <strong>{{.Target}}</strong></p>
+  <p>confidence: {{.Proposal.Confidence}} — {{.Proposal.Rationale}}</p>
+  <pre class="diff">{{range .Diff}}<span class="{{diffClass .Op}}">{{diffMarker .Op}} {{.Text}}</span>
+{{end}}</pre>
+  <button hx-post="/triage/{{.NoteEscaped}}/approve" hx-target="#triage-{{.NoteEscaped}}" hx-swap="outerHTML">Approve</button>
+  <button hx-post="/triage/{{.NoteEscaped}}/skip" hx-target="#triage-{{.NoteEscaped}}" hx-swap="outerHTML">Skip</button>
+</div>
+{{end}}

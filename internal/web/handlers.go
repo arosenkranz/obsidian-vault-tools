@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/arosenkranz/obsidian-vault-tools/internal/capture"
@@ -12,8 +14,9 @@ import (
 )
 
 type inboxViewNote struct {
-	Name string
-	Age  int
+	Name        string
+	Age         int
+	NoteEscaped string // url.PathEscape(filename with .md) — for the per-note triage button's URLs
 }
 
 func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +28,11 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	views := make([]inboxViewNote, 0, len(notes))
 	for _, n := range notes {
-		views = append(views, inboxViewNote{Name: n.Name, Age: vault.AgeDays(now, n.ModTime)})
+		views = append(views, inboxViewNote{
+			Name:        n.Name,
+			Age:         vault.AgeDays(now, n.ModTime),
+			NoteEscaped: url.PathEscape(filepath.Base(n.Path)),
+		})
 	}
 	s.renderInbox(w, views)
 }

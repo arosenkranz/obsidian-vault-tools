@@ -1,0 +1,5 @@
+{{define "triage-pending.html"}}
+<div id="triage-{{.NoteEscaped}}" hx-get="/triage/{{.NoteEscaped}}/status" hx-trigger="every 2s" hx-swap="outerHTML">
+  <em>Thinking…</em>
+</div>
+{{end}}
