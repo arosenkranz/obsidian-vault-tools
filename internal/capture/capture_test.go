@@ -61,6 +61,46 @@ func TestCaptureWritesNoteAndUpdatesMOC(t *testing.T) {
 	}
 }
 
+// CONTRACT(#55): a failed MOC update never aborts Capture — the note is
+// already on disk by the time the MOC is touched (found untested in Task
+// 3 review despite being row #55's headline behavior).
+func TestCaptureMOCUpdateFailureNeverAbortsCapture(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission-based write failures are not enforced")
+	}
+	vaultDir := t.TempDir()
+	resources := filepath.Join(vaultDir, "03-Resources")
+	if err := os.MkdirAll(resources, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(resources, "MOC Music.md"), []byte("# MOC Music\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Read-only Resources dir makes WriteNoteAtomic's temp-file creation
+	// fail when appendMOCConditional tries to update the MOC, while the
+	// note itself (written to the separate, writable Inbox dir) succeeds.
+	if err := os.Chmod(resources, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(resources, 0o755) })
+
+	cfg := CaptureConfig{VaultDir: vaultDir, Inbox: "00-Inbox", Resources: "03-Resources"}
+	req := Request{Body: "some idea", Title: "New Idea 2", Source: "cli", MOCName: "Music"}
+	result, err := Capture(context.Background(), cfg, req, stubFetcher{}, time.Now())
+	if err != nil {
+		t.Fatalf("a failed MOC update must not fail Capture: %v", err)
+	}
+	if result.MOCWarning == "" {
+		t.Error("expected MOCWarning to be populated on a failed MOC update")
+	}
+	if result.Rel == "" {
+		t.Error("the inbox note must still be recorded as captured")
+	}
+	if _, statErr := os.Stat(result.Path); statErr != nil {
+		t.Errorf("captured note must exist on disk despite the MOC failure: %v", statErr)
+	}
+}
+
 // CONTRACT(#46): a bare-URL first line uses the fetched title.
 func TestCaptureBareURLUsesFetchedTitle(t *testing.T) {
 	vaultDir := t.TempDir()

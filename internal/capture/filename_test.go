@@ -75,3 +75,22 @@ func TestNextAvailablePathBoundedProbe(t *testing.T) {
 		t.Fatal("expected an error once the probe bound is exhausted")
 	}
 }
+
+// BUG(fixed)(#51, design spec §filename policy "table-tested with case-
+// variant and NFD inputs"): an on-disk NFD-form name must still collide
+// with an NFC-normalized candidate (found in Task 3 review: lowerNames
+// originally NFC-normalized only the candidate, not the on-disk entries).
+func TestNextAvailablePathNFDOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	nfd := "2026-07-15 0830 Cafe\u0301.md" // "Café" as NFD: e + combining acute
+	if err := os.WriteFile(filepath.Join(dir, nfd), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, name, err := NextAvailablePath(dir, "2026-07-15 0830 Caf\u00e9", ".md") // NFC form
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "2026-07-15 0830 Caf\u00e9 (2).md" {
+		t.Errorf("name = %q, want an NFD-aware collision suffix", name)
+	}
+}

@@ -40,6 +40,13 @@ func NextAvailablePath(dir, stem, ext string) (path, name string, err error) {
 	return "", "", fmt.Errorf("could not find an available name for %q after %d attempts", stem, maxCollisionAttempts)
 }
 
+// lowerNames returns the lowercased, NFC-normalized basenames of dir's
+// entries. NFC normalization is required on BOTH sides of the collision
+// comparison — an existing on-disk file in NFD form (e.g. a decomposed é)
+// must still collide with an NFC-normalized candidate, or the "case-
+// insensitive, filesystem-independent" claim in row #51 silently breaks
+// for NFD inputs (design spec §filename policy: "table-tested with
+// case-variant and NFD inputs").
 func lowerNames(dir string) (map[string]bool, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -47,7 +54,7 @@ func lowerNames(dir string) (map[string]bool, error) {
 	}
 	names := make(map[string]bool, len(entries))
 	for _, e := range entries {
-		names[strings.ToLower(e.Name())] = true
+		names[strings.ToLower(norm.NFC.String(e.Name()))] = true
 	}
 	return names, nil
 }
