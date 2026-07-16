@@ -13,7 +13,15 @@ import (
 func newVaultFixture(t *testing.T) string {
 	t.Helper()
 	clearOVEnv(t)
-	vault := t.TempDir()
+	// EvalSymlinks the temp dir up front (macOS resolves /var to
+	// /private/var) so it matches vault.ContainPath's own symlink-resolved
+	// return value — same convention as vault package's own
+	// mustEvalSymlinks test helper (internal/vault/contain_test.go) and
+	// internal/triage/validate_test.go's testConfig.
+	vault, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, d := range []string{"00-Inbox", "01-Projects", "02-Areas", "03-Resources", "04-Archive", "99-Meta"} {
 		if err := os.MkdirAll(filepath.Join(vault, d), 0o755); err != nil {
 			t.Fatal(err)
