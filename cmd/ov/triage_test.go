@@ -94,16 +94,23 @@ func TestTriageQuit(t *testing.T) {
 	}
 }
 
-// CONTRACT(#102): EOF (Ctrl-D) also quits cleanly.
+// CONTRACT(#102): EOF (Ctrl-D) also quits cleanly — with a real note
+// pending, so the read loop genuinely reaches ReadString and hits EOF
+// rather than short-circuiting on an empty inbox (found in Task 6 review:
+// the original empty-fixture version never exercised the EOF branch).
 func TestTriageEOFQuits(t *testing.T) {
-	newVaultFixture(t)
+	vaultDir := newVaultFixture(t)
+	addNote(t, vaultDir, "00-Inbox/2026-07-15 0800 Foo.md", "# Foo\n", 0)
 	cfg, _ := resolveConfig("")
 	var out, errBuf bytes.Buffer
 	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("")), &out, &errBuf, triageDeps{}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(errBuf.String(), "Inbox is empty") && !strings.Contains(errBuf.String(), "interrupted") {
-		t.Errorf("stderr = %q", errBuf.String())
+	if !strings.Contains(errBuf.String(), "interrupted") {
+		t.Errorf("stderr = %q, want the EOF/interrupted message", errBuf.String())
+	}
+	if _, statErr := os.Stat(filepath.Join(vaultDir, "00-Inbox", "2026-07-15 0800 Foo.md")); statErr != nil {
+		t.Errorf("note must remain untouched after an EOF quit: %v", statErr)
 	}
 }
 
