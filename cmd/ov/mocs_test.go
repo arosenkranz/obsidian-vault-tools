@@ -1,11 +1,18 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"context"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/arosenkranz/obsidian-vault-tools/internal/config"
 )
 
 // CONTRACT(#63): mocs list shows name + description; count added from the
@@ -188,4 +195,168 @@ func TestMocsAddSanitizesNoteName(t *testing.T) {
 			t.Errorf("note-name injection not sanitized:\n%s", got)
 		}
 	}
+}
+
+type fakeMocRunner struct {
+	responses []string
+	i         int
+	gotPrompt []string
+}
+
+func (f *fakeMocRunner) Run(ctx context.Context, prompt string) (string, error) {
+	f.gotPrompt = append(f.gotPrompt, prompt)
+	if f.i >= len(f.responses) {
+		return "", errors.New("fakeMocRunner: no more responses")
+	}
+	r := f.responses[f.i]
+	f.i++
+	return r, nil
+}
+
+// CONTRACT(#114): name XOR --all enforced, else exit 2.
+func TestMocsCleanupRequiresNameXorAll(t *testing.T) {
+	newVaultFixture(t)
+	deps := mocCleanupDeps{runner: &fakeMocRunner{}}
+	err := runMocsCleanup(mustResolveConfig(t), "", false, bufio.NewReader(strings.NewReader("")), io.Discard, io.Discard, deps)
+	if !errors.Is(err, errExitCode2) {
+		t.Fatalf("err = %v, want errExitCode2", err)
+	}
+}
+
+func TestMocsCleanupRejectsBothNameAndAll(t *testing.T) {
+	newVaultFixture(t)
+	deps := mocCleanupDeps{runner: &fakeMocRunner{}}
+	err := runMocsCleanup(mustResolveConfig(t), "Music", true, bufio.NewReader(strings.NewReader("")), io.Discard, io.Discard, deps)
+	if !errors.Is(err, errExitCode2) {
+		t.Fatalf("err = %v, want errExitCode2", err)
+	}
+}
+
+// CONTRACT(#113): an unresolved single name exits 2.
+func TestMocsCleanupUnknownNameErrors(t *testing.T) {
+	newVaultFixture(t)
+	deps := mocCleanupDeps{runner: &fakeMocRunner{}}
+	err := runMocsCleanup(mustResolveConfig(t), "Nonexistent", false, bufio.NewReader(strings.NewReader("")), io.Discard, io.Discard, deps)
+	if !errors.Is(err, errExitCode2) {
+		t.Fatalf("err = %v, want errExitCode2", err)
+	}
+}
+
+// CONTRACT(#113): --all on a vault with zero MOCs exits 2.
+func TestMocsCleanupEmptyVaultAllErrors(t *testing.T) {
+	newVaultFixture(t)
+	deps := mocCleanupDeps{runner: &fakeMocRunner{}}
+	err := runMocsCleanup(mustResolveConfig(t), "", true, bufio.NewReader(strings.NewReader("")), io.Discard, io.Discard, deps)
+	if !errors.Is(err, errExitCode2) {
+		t.Fatalf("err = %v, want errExitCode2", err)
+	}
+}
+
+// CONTRACT(#115,#157): an identical proposal is reported "unchanged"
+// WITHOUT ever showing a diff or reading from the confirm prompt — the
+// unchanged check runs before the y/N prompt, matching v1's ordering
+// exactly. Proven here by supplying an empty stdin reader: if the
+// implementation incorrectly tried to read a confirm answer, ReadString
+// would return io.EOF and (per row #116) be treated as "n"/skip, which
+// would make this assertion fail on "unchanged" count — the test would
+// only pass by accident unless the ordering is actually right, so the
+// count assertion below is the real proof.
+func TestMocsCleanupUnchangedSkipsConfirmPrompt(t *testing.T) {
+	vaultDir := newVaultFixture(t)
+	content := "---\ntype: moc\n---\n# MOC Music\n\n- [[Foo]] — https://example.com/foo\n"
+	addNote(t, vaultDir, "03-Resources/MOC Music.md", content, 0)
+	runner := &fakeMocRunner{responses: []string{`{"new_content":"---\ntype: moc\n---\n# MOC Music\n\n- [[Foo]] — https://example.com/foo\n","duplicates_flagged":[],"summary":""}`}}
+	var errBuf bytes.Buffer
+	deps := mocCleanupDeps{runner: runner}
+	err := runMocsCleanup(mustResolveConfig(t), "Music", false, bufio.NewReader(strings.NewReader("")), io.Discard, &errBuf, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(errBuf.String(), "already well-organized") {
+		t.Errorf("stderr = %q, want the unchanged message", errBuf.String())
+	}
+	if strings.Contains(errBuf.String(), "Apply this reorganization?") {
+		t.Error("an identical proposal must never show the confirm prompt")
+	}
+}
+
+// BUG(fixed)(#109): a rejected target does not abort the run — --all
+// with one rejected and one valid target still processes both, proving
+// no partial-apply and no early exit.
+func TestMocsCleanupRejectedMovesToNextTarget(t *testing.T) {
+	vaultDir := newVaultFixture(t)
+	addNote(t, vaultDir, "03-Resources/MOC Alpha.md", "---\ntype: moc\n---\n# MOC Alpha\n\n- [[A]] — https://example.com/a\n", 0)
+	addNote(t, vaultDir, "03-Resources/MOC Beta.md", "---\ntype: moc\n---\n# MOC Beta\n\n- [[B]] — https://example.com/b\n", 0)
+	runner := &fakeMocRunner{responses: []string{
+		// Alpha: frontmatter mutated -> rejected.
+		`{"new_content":"---\ntype: moc\nextra: x\n---\n# MOC Alpha\n\n- [[A]] — https://example.com/a\n","duplicates_flagged":[],"summary":""}`,
+		// Beta: valid reorganization -> applied (confirmed via stdin "y").
+		`{"new_content":"---\ntype: moc\n---\n# MOC Beta\n\n### Group\n- [[B]] — https://example.com/b\n","duplicates_flagged":[],"summary":"grouped"}`,
+	}}
+	var errBuf bytes.Buffer
+	deps := mocCleanupDeps{runner: runner}
+	err := runMocsCleanup(mustResolveConfig(t), "", true, bufio.NewReader(strings.NewReader("y\n")), io.Discard, &errBuf, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := errBuf.String()
+	if !strings.Contains(out, "rejected") {
+		t.Errorf("expected a rejection to be reported:\n%s", out)
+	}
+	got, rerr := os.ReadFile(filepath.Join(vaultDir, "03-Resources", "MOC Beta.md"))
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	if !strings.Contains(string(got), "### Group") {
+		t.Errorf("Beta should have been applied:\n%s", got)
+	}
+	betaUnchanged, rerr := os.ReadFile(filepath.Join(vaultDir, "03-Resources", "MOC Alpha.md"))
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	if strings.Contains(string(betaUnchanged), "extra: x") {
+		t.Error("Alpha's rejected proposal must never be written")
+	}
+}
+
+// DECIDE(#116): EOF on the confirm prompt is "no" for THAT target only
+// — the run continues to the next target, unlike triage's abort-on-EOF.
+func TestMocsCleanupEOFOnConfirmSkipsOnlyThatTarget(t *testing.T) {
+	vaultDir := newVaultFixture(t)
+	addNote(t, vaultDir, "03-Resources/MOC Alpha.md", "---\ntype: moc\n---\n# MOC Alpha\n\n- [[A]] — https://example.com/a\n", 0)
+	addNote(t, vaultDir, "03-Resources/MOC Beta.md", "---\ntype: moc\n---\n# MOC Beta\n\n- [[B]] — https://example.com/b\n", 0)
+	runner := &fakeMocRunner{responses: []string{
+		`{"new_content":"---\ntype: moc\n---\n# MOC Alpha\n\n### G\n- [[A]] — https://example.com/a\n","duplicates_flagged":[],"summary":""}`,
+		`{"new_content":"---\ntype: moc\n---\n# MOC Beta\n\n### G\n- [[B]] — https://example.com/b\n","duplicates_flagged":[],"summary":""}`,
+	}}
+	var errBuf bytes.Buffer
+	deps := mocCleanupDeps{runner: runner}
+	// Empty stdin: BOTH targets hit EOF on their confirm read; both must
+	// be skipped, and the run must still complete (not abort after the
+	// first EOF) and process Beta too.
+	err := runMocsCleanup(mustResolveConfig(t), "", true, bufio.NewReader(strings.NewReader("")), io.Discard, &errBuf, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.gotPrompt) != 2 {
+		t.Fatalf("expected both targets to be proposed (run must not abort after the first EOF), got %d calls", len(runner.gotPrompt))
+	}
+	for _, name := range []string{"MOC Alpha.md", "MOC Beta.md"} {
+		got, rerr := os.ReadFile(filepath.Join(vaultDir, "03-Resources", name))
+		if rerr != nil {
+			t.Fatal(rerr)
+		}
+		if strings.Contains(string(got), "### G") {
+			t.Errorf("%s should have been skipped (EOF = no), but was applied:\n%s", name, got)
+		}
+	}
+}
+
+func mustResolveConfig(t *testing.T) *config.Config {
+	t.Helper()
+	cfg, err := resolveConfig("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
 }
