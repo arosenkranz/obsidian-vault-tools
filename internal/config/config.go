@@ -24,7 +24,8 @@ type Config struct {
 	Model     string `toml:"model"`
 	DocsHost  string `toml:"docs_host"`
 	DocsPath  string `toml:"docs_path"`
-	DocsURL   string `toml:"docs_url"`
+	DocsURL      string   `toml:"docs_url"`
+	StaleExclude []string `toml:"stale_exclude"`
 }
 
 // envFields: the OV_* env contract (names frozen; design spec §contract) —
@@ -102,6 +103,9 @@ func Load(explicitPath string) (*Config, error) {
 		}
 	}
 
+	if cfg.StaleExclude == nil {
+		cfg.StaleExclude = []string{"Daily Notes"}
+	}
 	cfg.VaultDir = expandPath(cfg.VaultDir)
 	return cfg, nil
 }

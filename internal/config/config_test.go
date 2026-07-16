@@ -4,6 +4,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -136,6 +137,44 @@ func TestParaRoots(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("ParaRoots = %v, want %v", got, want)
 		}
+	}
+}
+
+// CONTRACT(#62)+BUG(fixed)(#61): stale exclusions are config-driven. Default
+// keeps v1's "Daily Notes"; Archive/Meta come from their own keys so
+// OV_ARCHIVE/OV_META overrides are honored (v1 hardcoded the paths).
+func TestStaleExcludeDefault(t *testing.T) {
+	clearOVEnv(t)
+	cfg, err := Load(filepath.Join(t.TempDir(), "none.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(cfg.StaleExclude, []string{"Daily Notes"}) {
+		t.Errorf("default StaleExclude = %v, want [Daily Notes]", cfg.StaleExclude)
+	}
+}
+
+func TestStaleExcludeFromFile(t *testing.T) {
+	clearOVEnv(t)
+	p := writeTemp(t, "vault_dir = \"/v\"\nstale_exclude = [\"Templates\", \"Daily Notes\"]\n")
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(cfg.StaleExclude, []string{"Templates", "Daily Notes"}) {
+		t.Errorf("StaleExclude = %v", cfg.StaleExclude)
+	}
+}
+
+func TestStaleExcludeExplicitEmpty(t *testing.T) {
+	clearOVEnv(t)
+	p := writeTemp(t, "vault_dir = \"/v\"\nstale_exclude = []\n")
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.StaleExclude == nil || len(cfg.StaleExclude) != 0 {
+		t.Errorf("explicit empty list must stay empty, got %v", cfg.StaleExclude)
 	}
 }
 
