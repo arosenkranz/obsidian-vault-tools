@@ -24,17 +24,20 @@ var (
 	// or the inbox, layered on top of vault.ContainPath's pure filesystem
 	// containment.
 	ErrTargetNotParaRoot = errors.New("triage: target is not inside a configured PARA root or the inbox")
-	// ErrFrontmatterPatchInvalid is row #152's fix: frontmatter_patch is
-	// fully LLM-controlled JSON written to disk via vault.Frontmatter.Set
-	// with zero newline sanitization. A key or string value containing
-	// "\n"/"\r" (or a []any list element containing one) can prematurely
-	// close the frontmatter fence when rendered, turning everything after
-	// an injected "---" into unguarded note body — the same outcome row
-	// #5's body_patch/links_to_add rejection exists to prevent, via a
-	// second, previously unchecked channel. A key or value that, once
-	// trimmed, is exactly "---" or "..." is rejected too: both are valid
-	// YAML/frontmatter fence markers that corrupt the block as a bare
-	// standalone line even without an embedded newline.
+	// ErrFrontmatterPatchInvalid is row #152's fix (and its residual
+	// hardening): frontmatter_patch is fully LLM-controlled JSON written
+	// to disk via apply.go's renderPatchValue/mergeFrontmatter with zero
+	// newline sanitization. renderPatchValue stringifies ANY value via
+	// fmt.Sprint — including a nested map[string]any or nested []any —
+	// so a key, or the value's *rendered* form once renderPatchValue has
+	// run on it, containing "\n"/"\r" can prematurely close the
+	// frontmatter fence, turning everything after an injected "---"
+	// into unguarded note body: the same outcome row #5's body_patch/
+	// links_to_add rejection exists to prevent, via a second channel.
+	// A key or rendered value that, once trimmed, is exactly "---" or
+	// "..." is rejected too: both are valid YAML/frontmatter fence
+	// markers that corrupt the block as a bare standalone line even
+	// without an embedded newline.
 	ErrFrontmatterPatchInvalid = errors.New("triage: frontmatter_patch contains a newline or a bare fence marker (row #152 enforcement)")
 )
 
@@ -86,43 +89,30 @@ func Validate(cfg Config, p Proposal) error {
 	return fmt.Errorf("%w: %s", ErrTargetNotParaRoot, p.To)
 }
 
-// validateFrontmatterPatch is row #152's fix: frontmatter_patch is fully
-// LLM-controlled JSON (map[string]any) that apply.go's mergeFrontmatter/
-// renderPatchValue write straight to disk via vault.Frontmatter.Set with
-// zero newline sanitization. Any key or string value (including a string
-// element inside a []any list value — mirroring renderPatchValue's list
-// handling) containing "\n" or "\r" can prematurely close the
-// frontmatter fence when rendered, turning everything after an injected
-// "---" into unguarded note body. A key or value that, once trimmed, is
-// exactly "---" or "..." is rejected too: both are valid YAML/
-// frontmatter fence markers that corrupt the block as a bare standalone
-// line even without an embedded newline.
+// validateFrontmatterPatch is row #152's fix, hardened against the
+// residual bypass a security review found in the original version: that
+// version re-derived apply.go's supported frontmatter_patch shapes
+// (bare string, []any of strings) instead of checking what actually
+// gets written to disk, so a nested map[string]any or nested []any
+// value — never a bare string itself, but still stringified whole by
+// renderPatchValue via fmt.Sprint, embedded newlines and all — sailed
+// through unchecked.
+//
+// The fix: for every key/value pair, render the value with the exact
+// same renderPatchValue apply.go's mergeFrontmatter calls at write
+// time, then run the newline/bare-fence check against that rendered
+// string (and the key). Because this checks the actual bytes that will
+// land on disk rather than a re-derived approximation of the input
+// shape, it covers every case — top-level string, string list, nested
+// map, nested list, mixed list — uniformly, and structurally cannot
+// drift out of sync with renderPatchValue again.
 func validateFrontmatterPatch(patch map[string]any) error {
 	for k, v := range patch {
 		if err := checkFrontmatterPatchString(k, k); err != nil {
 			return err
 		}
-		if err := checkFrontmatterPatchValue(k, v); err != nil {
+		if err := checkFrontmatterPatchString(k, renderPatchValue(v)); err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-// checkFrontmatterPatchValue inspects a single frontmatter_patch value:
-// a bare string is checked directly, and a []any list (renderPatchValue's
-// other supported shape) has each string element checked in turn.
-func checkFrontmatterPatchValue(key string, v any) error {
-	if s, ok := v.(string); ok {
-		return checkFrontmatterPatchString(key, s)
-	}
-	if list, ok := v.([]any); ok {
-		for _, e := range list {
-			if s, ok := e.(string); ok {
-				if err := checkFrontmatterPatchString(key, s); err != nil {
-					return err
-				}
-			}
 		}
 	}
 	return nil

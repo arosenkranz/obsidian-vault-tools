@@ -223,3 +223,70 @@ func TestValidateAcceptsNormalFrontmatterPatch(t *testing.T) {
 		t.Errorf("Validate() = %v, want nil for a well-formed frontmatter_patch", err)
 	}
 }
+
+// TestValidateRejectsFrontmatterPatchNestedMapInjection is the security
+// reviewer's primary reported bypass of the original row #152 fix: a
+// nested map[string]any value is neither a bare string nor a []any of
+// strings, so the original type-shape recursion never inspected it —
+// yet apply.go's renderPatchValue stringifies it whole via fmt.Sprint,
+// embedded newline and all. Validating the rendered string closes this.
+func TestValidateRejectsFrontmatterPatchNestedMapInjection(t *testing.T) {
+	cfg := testConfig(t)
+	p := validProposal()
+	p.FrontmatterPatch = map[string]any{
+		"status": map[string]any{"x": "a\n---\nb"},
+	}
+	err := Validate(cfg, p)
+	if !errors.Is(err, ErrFrontmatterPatchInvalid) {
+		t.Fatalf("Validate() = %v, want ErrFrontmatterPatchInvalid", err)
+	}
+}
+
+// TestValidateRejectsFrontmatterPatchListContainingMap covers a []any
+// list whose element is itself a map[string]any carrying an injected
+// newline — the original list-of-strings-only recursion skipped any
+// non-string element silently.
+func TestValidateRejectsFrontmatterPatchListContainingMap(t *testing.T) {
+	cfg := testConfig(t)
+	p := validProposal()
+	p.FrontmatterPatch = map[string]any{
+		"tags": []any{"a", map[string]any{"x": "a\n---\nb"}},
+	}
+	err := Validate(cfg, p)
+	if !errors.Is(err, ErrFrontmatterPatchInvalid) {
+		t.Fatalf("Validate() = %v, want ErrFrontmatterPatchInvalid", err)
+	}
+}
+
+// TestValidateRejectsFrontmatterPatchNestedList covers a []any
+// containing another []any (rather than a string) carrying an injected
+// newline, another shape the original recursion never descended into.
+func TestValidateRejectsFrontmatterPatchNestedList(t *testing.T) {
+	cfg := testConfig(t)
+	p := validProposal()
+	p.FrontmatterPatch = map[string]any{
+		"tags": []any{"a", []any{"b", "c\n---\nd"}},
+	}
+	err := Validate(cfg, p)
+	if !errors.Is(err, ErrFrontmatterPatchInvalid) {
+		t.Fatalf("Validate() = %v, want ErrFrontmatterPatchInvalid", err)
+	}
+}
+
+// TestValidateRejectsReviewerEmpiricalProofPayload is an independent
+// end-to-end reproduction of the security reviewer's exact empirical
+// proof-of-bypass payload structure —
+// {"frontmatter_patch": {"status": {"x": "ok\n---\n# Injected\nattacker body"}}} —
+// run through the real Validate function, confirming the residual
+// CRITICAL finding is closed.
+func TestValidateRejectsReviewerEmpiricalProofPayload(t *testing.T) {
+	cfg := testConfig(t)
+	p := validProposal()
+	p.FrontmatterPatch = map[string]any{
+		"status": map[string]any{"x": "ok\n---\n# Injected\nattacker body"},
+	}
+	err := Validate(cfg, p)
+	if !errors.Is(err, ErrFrontmatterPatchInvalid) {
+		t.Fatalf("Validate() = %v, want ErrFrontmatterPatchInvalid (reviewer's reported bypass must now be rejected)", err)
+	}
+}
