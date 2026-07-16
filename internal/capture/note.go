@@ -19,6 +19,26 @@ type Params struct {
 
 var headingStripRe = regexp.MustCompile(`^\s*#+\s*`)
 
+// frontmatterUnsafeRe matches the first character that would corrupt YAML
+// flow syntax or inject an additional frontmatter line if interpolated
+// verbatim into a single-line scalar/flow-sequence value (found in the
+// phase-2 final whole-branch review: BuildNote previously interpolated
+// tags/source unsanitized).
+var frontmatterUnsafeRe = regexp.MustCompile(`[\r\n\[\],"]`)
+
+// sanitizeFrontmatterScalar truncates a value at its first newline or YAML
+// flow-sequence metacharacter before it's interpolated into a frontmatter
+// tags/source line, then trims the result. Truncating (rather than just
+// deleting the offending character) matters: a value like "cli\ntype:
+// evil" must not collapse into "clitype: evil" — the attacker-controlled
+// suffix has to go, not just the newline that separated it.
+func sanitizeFrontmatterScalar(s string) string {
+	if loc := frontmatterUnsafeRe.FindStringIndex(s); loc != nil {
+		s = s[:loc[0]]
+	}
+	return strings.TrimSpace(s)
+}
+
 // BuildNote assembles frontmatter + heading + body exactly as v1
 // capture_note (behavior inventory row #52: type/created/modified/source/
 // [tags]/[moc]; row #53: "# Title" heading, first body line dropped iff it
@@ -31,9 +51,20 @@ func BuildNote(p Params) string {
 	b.WriteString("type: inbox\n")
 	fmt.Fprintf(&b, "created: %s\n", p.Created)
 	fmt.Fprintf(&b, "modified: %s\n", p.Created)
-	fmt.Fprintf(&b, "source: %s\n", p.Source)
+	// BUG(fixed)(#142): tags/source interpolated into YAML frontmatter
+	// without sanitization — sanitize before writing (phase-2 final
+	// whole-branch review).
+	fmt.Fprintf(&b, "source: %s\n", sanitizeFrontmatterScalar(p.Source))
 	if len(p.Tags) > 0 {
-		fmt.Fprintf(&b, "tags: [%s]\n", strings.Join(p.Tags, ", "))
+		sanitized := make([]string, 0, len(p.Tags))
+		for _, t := range p.Tags {
+			if s := sanitizeFrontmatterScalar(t); s != "" {
+				sanitized = append(sanitized, s)
+			}
+		}
+		if len(sanitized) > 0 {
+			fmt.Fprintf(&b, "tags: [%s]\n", strings.Join(sanitized, ", "))
+		}
 	}
 	if p.MOCName != "" {
 		fmt.Fprintf(&b, "moc: [[%s]]\n", p.MOCName)

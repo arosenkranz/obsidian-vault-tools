@@ -1,7 +1,12 @@
 // internal/capture/note_test.go
 package capture
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/arosenkranz/obsidian-vault-tools/internal/vault"
+)
 
 // Golden: exact captured-note bytes under an injected clock (design spec
 // §Testing strategy tier 2).
@@ -42,5 +47,29 @@ func TestBodyWithoutTitleEchoDropsMatchingFirstLine(t *testing.T) {
 		if got := bodyWithoutTitleEcho(c.body, c.title); got != c.want {
 			t.Errorf("bodyWithoutTitleEcho(%q, %q) = %q, want %q", c.body, c.title, got, c.want)
 		}
+	}
+}
+
+// BUG(fixed)(#142): tags/source containing YAML flow metacharacters or
+// newlines must not corrupt the emitted frontmatter (found in the phase-2
+// final whole-branch review).
+func TestBuildNoteSanitizesTagsAndSource(t *testing.T) {
+	p := Params{
+		Title:   "Safe Title",
+		Body:    "body",
+		Tags:    []string{"a]bad", "clean"},
+		Source:  "cli\ntype: evil",
+		Created: "2026-07-15",
+	}
+	got := BuildNote(p)
+	if strings.Contains(got, "type: evil") {
+		t.Errorf("newline injection into frontmatter: %q", got)
+	}
+	if strings.Count(got, "tags: [") != 1 {
+		t.Errorf("tags line malformed: %q", got)
+	}
+	fm, _ := vault.ParseNote(got)
+	if fm == nil {
+		t.Fatal("frontmatter failed to parse after sanitization")
 	}
 }
