@@ -39,3 +39,17 @@ func ExtractJSON(text string) (map[string]any, error) {
 	}
 	return nil, fmt.Errorf("no JSON object found in LLM response:\n--- raw ---\n%s", text)
 }
+
+var htmlBlockRe = regexp.MustCompile(`(?is)<html.*?>.*?</html>`)
+
+// ExtractHTMLBlock ports vault.sh publish's HTML cleanup (row #74): when
+// the LLM response contains an <html>...</html> block (case-insensitive,
+// dotall), return exactly that span, trimmed; otherwise return the raw
+// response, trimmed. Consumed starting phase 4/5 (publish/render); the
+// contract is defined now per design spec so it doesn't need revisiting.
+func ExtractHTMLBlock(text string) string {
+	if m := htmlBlockRe.FindString(text); m != "" {
+		return strings.TrimSpace(m)
+	}
+	return strings.TrimSpace(text)
+}

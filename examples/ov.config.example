@@ -21,3 +21,16 @@ OV_LLM_CMD="claude --print"
 
 # Optional model override (passed as --model). Empty = use the LLM's default.
 OV_MODEL=""
+
+# SECURITY: triage --llm interpolates note bodies and previously-fetched
+# URL titles into the LLM prompt. Those are attacker-influenced (a
+# malicious clipped page or a crafted inbox note). ov2 always runs the LLM
+# subprocess with its CWD set to an empty scratch directory (never your
+# vault) — but tool access is provider-specific and ov2 cannot inject
+# provider-specific flags into OV_LLM_CMD without breaking it for other
+# providers. If your provider supports disabling tool/file access for a
+# single invocation, point OV_LLM_CMD at a wrapper or settings profile
+# that does so. For Claude Code, consider a dedicated settings file with
+# tool permissions denied and reference it via --settings, or a shell
+# wrapper script that passes the equivalent flag for your installed
+# version — check `claude --help` for the current flag name.
