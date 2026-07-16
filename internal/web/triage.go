@@ -103,6 +103,16 @@ func (s *Server) handleTriageApprove(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Serialize the read-check-apply-clear sequence: without this, two
+	// concurrent approve requests for the same note (e.g. a browser
+	// double-click) can both observe the job as StatusDone before either
+	// clears it and both call triage.Apply concurrently (M1, final
+	// review). The second caller blocks here, then — once the first has
+	// applied and cleared the job — sees jobs.current return ok=false and
+	// takes the "no completed proposal" path below instead of racing
+	// into a second Apply.
+	s.jobs.approveMu.Lock()
+	defer s.jobs.approveMu.Unlock()
 	job, ok := s.jobs.current(note)
 	if !ok || job.Status != llm.StatusDone {
 		http.Error(w, "no completed proposal to approve", http.StatusConflict)

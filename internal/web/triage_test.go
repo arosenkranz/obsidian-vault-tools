@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -217,5 +218,74 @@ func TestHandleTriageHealthAuthFailure(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "auth expired") {
 		t.Errorf("body = %q", rec.Body.String())
+	}
+}
+
+// BUG(fixed)(M1, final review): two concurrent approve requests for the
+// same note (e.g. a browser double-click) used to both observe the job
+// as StatusDone before either cleared it, and both call triage.Apply
+// concurrently. Not corrupting (the loser's WriteNoteAtomic create-new-
+// target refusal fails cleanly) but wasteful and confusing. approveMu
+// now serializes the read-check-apply-clear sequence, so the second
+// caller blocks until the first clears the job and then cleanly sees
+// "no completed proposal to approve" instead of racing into Apply. The
+// safety property under test: the target file exists exactly once and
+// the source inbox note is gone, regardless of which caller's HTTP
+// response reflects the successful apply.
+func TestHandleTriageApproveConcurrentDoubleClickIsSerialized(t *testing.T) {
+	vaultDir, cfg := newTestVault(t)
+	writeInboxTestNote(t, vaultDir, "First.md", "---\ntype: inbox\n---\nbody\n")
+	srv := New(cfg, stubFetcher{}, &fakeLLMRunner{response: `{"to":"02-Areas/X.md","new_title":"X","confidence":"high","rationale":"r"}`}, nil)
+	triagePOST(t, srv, "/triage/First.md/propose")
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		rec := triageGET(t, srv, "/triage/First.md/status")
+		if strings.Contains(rec.Body.String(), "02-Areas/X.md") {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	var wg sync.WaitGroup
+	recs := make([]*httptest.ResponseRecorder, 2)
+	wg.Add(2)
+	for i := range 2 {
+		go func(i int) {
+			defer wg.Done()
+			recs[i] = triagePOST(t, srv, "/triage/First.md/approve")
+		}(i)
+	}
+	wg.Wait()
+
+	successes := 0
+	conflicts := 0
+	for _, rec := range recs {
+		switch {
+		case rec.Code == http.StatusOK && strings.Contains(rec.Body.String(), "Filed"):
+			successes++
+		case rec.Code == http.StatusConflict:
+			conflicts++
+		default:
+			t.Errorf("unexpected response: status = %d, body = %s", rec.Code, rec.Body.String())
+		}
+	}
+	if successes+conflicts != 2 {
+		t.Errorf("expected every response to be either a success or a 409 conflict; successes=%d conflicts=%d", successes, conflicts)
+	}
+
+	targetPath := filepath.Join(vaultDir, "02-Areas", "X.md")
+	matches, err := filepath.Glob(filepath.Join(vaultDir, "02-Areas", "X*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 1 {
+		t.Errorf("expected exactly one target file, got %d: %v", len(matches), matches)
+	}
+	if _, err := os.Stat(targetPath); err != nil {
+		t.Errorf("target note not written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(vaultDir, "00-Inbox", "First.md")); !os.IsNotExist(err) {
+		t.Errorf("expected source inbox note to be gone, stat err = %v", err)
 	}
 }

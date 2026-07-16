@@ -13,10 +13,22 @@ import (
 // the note's vault-relative filename (design spec's "in-process map keyed
 // by note path" — Core interaction contract, row #150). Regenerated on
 // restart; fine for one user (design spec).
+//
+// approveMu serializes the read-check-apply-clear sequence in
+// handleTriageApprove end to end. Without it, two concurrent approve
+// requests for the same note (e.g. a browser double-click) can both
+// observe the job as StatusDone before either clears it and both call
+// triage.Apply for the same note — not corrupting (the loser's
+// vault.WriteNoteAtomic create-new-target refusal fails cleanly) but
+// confusing and unnecessary. A single coarse mutex is sufficient here:
+// per the design spec this is a single-user local tool at a scale (10^3-
+// 10^4 notes) where serializing all approvals introduces no meaningful
+// contention, so per-note lock striping would be over-engineering.
 type triageJobs struct {
-	mgr    *llm.JobManager[triage.Proposal]
-	mu     sync.Mutex
-	byNote map[string]string // note filename -> current job id
+	mgr       *llm.JobManager[triage.Proposal]
+	mu        sync.Mutex
+	byNote    map[string]string // note filename -> current job id
+	approveMu sync.Mutex        // serializes handleTriageApprove's check-apply-clear sequence
 }
 
 func newTriageJobs() *triageJobs {
