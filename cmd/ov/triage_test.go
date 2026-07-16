@@ -17,12 +17,12 @@ func TestTriageSkip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var out, errBuf bytes.Buffer
+	var errBuf bytes.Buffer
 	deps := triageDeps{
 		pickFolder: func([]string) (string, error) { t.Fatal("pickFolder should not be called"); return "", nil },
 		confirm:    func(string) (bool, error) { t.Fatal("confirm should not be called"); return false, nil },
 	}
-	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("s\n")), &out, &errBuf, deps); err != nil {
+	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("s\n")), &errBuf, deps); err != nil {
 		t.Fatal(err)
 	}
 	if _, statErr := os.Stat(filepath.Join(vaultDir, "00-Inbox", "2026-07-15 0800 Foo.md")); statErr != nil {
@@ -38,9 +38,9 @@ func TestTriageMove(t *testing.T) {
 	vaultDir := newVaultFixture(t)
 	addNote(t, vaultDir, "00-Inbox/2026-07-15 0800 Foo.md", "# Foo\n", 0)
 	cfg, _ := resolveConfig("")
-	var out, errBuf bytes.Buffer
+	var errBuf bytes.Buffer
 	deps := triageDeps{pickFolder: func(folders []string) (string, error) { return "02-Areas", nil }}
-	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("\n")), &out, &errBuf, deps); err != nil {
+	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("\n")), &errBuf, deps); err != nil {
 		t.Fatal(err)
 	}
 	if _, statErr := os.Stat(filepath.Join(vaultDir, "02-Areas", "2026-07-15 0800 Foo.md")); statErr != nil {
@@ -53,9 +53,9 @@ func TestTriageDeleteConfirmed(t *testing.T) {
 	vaultDir := newVaultFixture(t)
 	addNote(t, vaultDir, "00-Inbox/2026-07-15 0800 Foo.md", "# Foo\n", 0)
 	cfg, _ := resolveConfig("")
-	var out, errBuf bytes.Buffer
+	var errBuf bytes.Buffer
 	deps := triageDeps{confirm: func(string) (bool, error) { return true, nil }}
-	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("d\n")), &out, &errBuf, deps); err != nil {
+	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("d\n")), &errBuf, deps); err != nil {
 		t.Fatal(err)
 	}
 	if _, statErr := os.Stat(filepath.Join(vaultDir, "00-Inbox", "2026-07-15 0800 Foo.md")); !os.IsNotExist(statErr) {
@@ -68,9 +68,9 @@ func TestTriageDeleteDeclined(t *testing.T) {
 	vaultDir := newVaultFixture(t)
 	addNote(t, vaultDir, "00-Inbox/2026-07-15 0800 Foo.md", "# Foo\n", 0)
 	cfg, _ := resolveConfig("")
-	var out, errBuf bytes.Buffer
+	var errBuf bytes.Buffer
 	deps := triageDeps{confirm: func(string) (bool, error) { return false, nil }}
-	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("d\n")), &out, &errBuf, deps); err != nil {
+	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("d\n")), &errBuf, deps); err != nil {
 		t.Fatal(err)
 	}
 	if _, statErr := os.Stat(filepath.Join(vaultDir, "00-Inbox", "2026-07-15 0800 Foo.md")); statErr != nil {
@@ -84,9 +84,9 @@ func TestTriageQuit(t *testing.T) {
 	addNote(t, vaultDir, "00-Inbox/2026-07-15 0800 A.md", "# A\n", 0)
 	addNote(t, vaultDir, "00-Inbox/2026-07-15 0801 B.md", "# B\n", 0)
 	cfg, _ := resolveConfig("")
-	var out, errBuf bytes.Buffer
+	var errBuf bytes.Buffer
 	deps := triageDeps{pickFolder: func([]string) (string, error) { t.Fatal("should not reach the second note"); return "", nil }}
-	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("q\n")), &out, &errBuf, deps); err != nil {
+	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("q\n")), &errBuf, deps); err != nil {
 		t.Fatal(err)
 	}
 	if _, statErr := os.Stat(filepath.Join(vaultDir, "00-Inbox", "2026-07-15 0800 A.md")); statErr != nil {
@@ -102,8 +102,8 @@ func TestTriageEOFQuits(t *testing.T) {
 	vaultDir := newVaultFixture(t)
 	addNote(t, vaultDir, "00-Inbox/2026-07-15 0800 Foo.md", "# Foo\n", 0)
 	cfg, _ := resolveConfig("")
-	var out, errBuf bytes.Buffer
-	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("")), &out, &errBuf, triageDeps{}); err != nil {
+	var errBuf bytes.Buffer
+	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("")), &errBuf, triageDeps{}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(errBuf.String(), "interrupted") {
@@ -119,9 +119,9 @@ func TestTriageMoveRejectsEscape(t *testing.T) {
 	vaultDir := newVaultFixture(t)
 	addNote(t, vaultDir, "00-Inbox/2026-07-15 0800 Foo.md", "# Foo\n", 0)
 	cfg, _ := resolveConfig("")
-	var out, errBuf bytes.Buffer
+	var errBuf bytes.Buffer
 	deps := triageDeps{pickFolder: func([]string) (string, error) { return "../../../etc", nil }}
-	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("\n")), &out, &errBuf, deps); err != nil {
+	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("\n")), &errBuf, deps); err != nil {
 		t.Fatal(err)
 	}
 	if _, statErr := os.Stat(filepath.Join(vaultDir, "00-Inbox", "2026-07-15 0800 Foo.md")); statErr != nil {
@@ -139,9 +139,9 @@ func TestTriageMoveRefusesExistingDestination(t *testing.T) {
 	addNote(t, vaultDir, "00-Inbox/2026-07-15 0800 Foo.md", "new\n", 0)
 	addNote(t, vaultDir, "02-Areas/2026-07-15 0800 Foo.md", "old\n", 0)
 	cfg, _ := resolveConfig("")
-	var out, errBuf bytes.Buffer
+	var errBuf bytes.Buffer
 	deps := triageDeps{pickFolder: func([]string) (string, error) { return "02-Areas", nil }}
-	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("\n")), &out, &errBuf, deps); err != nil {
+	if err := runTriage(cfg, bufio.NewReader(strings.NewReader("\n")), &errBuf, deps); err != nil {
 		t.Fatal(err)
 	}
 	got, rerr := os.ReadFile(filepath.Join(vaultDir, "02-Areas", "2026-07-15 0800 Foo.md"))

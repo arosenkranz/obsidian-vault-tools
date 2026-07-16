@@ -40,7 +40,7 @@ func newTriageCmd() *cobra.Command {
 				return errors.New("ov2 triage requires an interactive terminal")
 			}
 			deps := triageDeps{pickFolder: tui.RunFolderPicker, confirm: tui.Confirm}
-			return runTriage(cfg, bufio.NewReader(cmd.InOrStdin()), cmd.OutOrStdout(), cmd.ErrOrStderr(), deps)
+			return runTriage(cfg, bufio.NewReader(cmd.InOrStdin()), cmd.ErrOrStderr(), deps)
 		},
 	}
 	cmd.Flags().StringVar(&vaultFlag, "vault", "", "override vault directory")
@@ -54,7 +54,7 @@ func newTriageCmd() *cobra.Command {
 // (behavior inventory row #57, #102): Enter/f = folder picker + move, s =
 // skip, d = delete (with an explicit confirm, row #132), q = quit, EOF =
 // quit.
-func runTriage(cfg *config.Config, in *bufio.Reader, out, errw io.Writer, deps triageDeps) error {
+func runTriage(cfg *config.Config, in *bufio.Reader, errw io.Writer, deps triageDeps) error {
 	notes, err := vault.ListInbox(cfg.VaultDir, cfg.Inbox)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
