@@ -8,7 +8,7 @@ import (
 )
 
 // CONTRACT(#56): inbox lists notes sorted by name. DECIDE(#123): records go to
-// stdout, chrome to stderr. CONTRACT(#19): notes older than 7 days marked ⚠.
+// stdout, chrome to stderr.
 func TestInboxLists(t *testing.T) {
 	vault := newVaultFixture(t)
 	addNote(t, vault, "00-Inbox/2026-01-01 Old Note.md", "x", 30)
@@ -24,11 +24,25 @@ func TestInboxLists(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("want 2 stdout records, got %d: %q", len(lines), out)
 	}
-	if !strings.HasPrefix(lines[0], "⚠\t2026-01-01 Old Note\t") {
-		t.Errorf("line 0 = %q, want ⚠ + name + age", lines[0])
+	if lines[0] != "2026-01-01 Old Note\t30" {
+		t.Errorf("line 0 = %q, want name + age", lines[0])
 	}
-	if !strings.HasPrefix(lines[1], "•\t2026-07-14 Fresh\t") {
-		t.Errorf("line 1 = %q, want • + name + age", lines[1])
+	if lines[1] != "2026-07-14 Fresh\t1" {
+		t.Errorf("line 1 = %q, want name + age", lines[1])
+	}
+}
+
+// CONTRACT(#19): notes older than 7 days marked ⚠; age exactly 7 is not a
+// warning (strictly age > 7).
+func TestAgeMarker(t *testing.T) {
+	if got := ageMarker(8); got != "⚠" {
+		t.Errorf("ageMarker(8) = %q, want ⚠", got)
+	}
+	if got := ageMarker(7); got != "•" {
+		t.Errorf("ageMarker(7) = %q, want •", got)
+	}
+	if got := ageMarker(0); got != "•" {
+		t.Errorf("ageMarker(0) = %q, want •", got)
 	}
 }
 
