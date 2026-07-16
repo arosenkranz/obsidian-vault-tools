@@ -126,3 +126,35 @@ func TestValidateRejectsMissingTo(t *testing.T) {
 		t.Errorf("Validate() = %v, want ErrMissingTo", err)
 	}
 }
+
+// BUG(fixed)(#97): Validate computed filepath.Rel(cfg.VaultDir, targetAbs)
+// against the RAW, unresolved cfg.VaultDir, while targetAbs (returned by
+// vault.ContainPath) is built from ContainPath's own *symlink-resolved*
+// root. On any vault dir that passes through a symlink — e.g. macOS
+// /var -> /private/var, which t.TempDir() hits naturally, and real vault
+// locations like iCloud Drive / CloudStorage — this produced a bogus
+// "../../private/var/..."-style relative path, so Validate spuriously
+// rejected a perfectly valid PARA-root target with ErrTargetNotParaRoot.
+// Unlike testConfig (which pre-resolves t.TempDir() via EvalSymlinks to
+// route around this exact bug), this test deliberately leaves VaultDir
+// UNRESOLVED to reproduce and prove the fix.
+func TestValidateHandlesSymlinkedVaultDir(t *testing.T) {
+	vaultDir := t.TempDir() // deliberately NOT EvalSymlinks'd
+	for _, d := range []string{"00-Inbox", "01-Projects", "02-Areas", "03-Resources", "04-Archive", "99-Meta"} {
+		if err := os.MkdirAll(filepath.Join(vaultDir, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := Config{
+		VaultDir:  vaultDir,
+		Inbox:     "00-Inbox",
+		Projects:  "01-Projects",
+		Areas:     "02-Areas",
+		Resources: "03-Resources",
+		Archive:   "04-Archive",
+	}
+	p := validProposal()
+	if err := Validate(cfg, p); err != nil {
+		t.Errorf("Validate() = %v, want nil (a symlinked VaultDir must not cause a spurious ErrTargetNotParaRoot)", err)
+	}
+}

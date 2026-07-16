@@ -46,7 +46,18 @@ func Validate(cfg Config, p Proposal) error {
 	if err != nil {
 		return err
 	}
-	rel, err := filepath.Rel(cfg.VaultDir, targetAbs)
+	// Resolve cfg.VaultDir the same way vault.ContainPath resolves its own
+	// root (row #97 fix): ContainPath returns targetAbs built from the
+	// *symlink-resolved* root, so computing Rel against the raw,
+	// unresolved cfg.VaultDir here would produce a bogus "../.."-style
+	// path on any vault dir that passes through a symlink (e.g. macOS
+	// /var -> /private/var, common for t.TempDir() and real vault
+	// locations like iCloud Drive / CloudStorage paths).
+	vaultDirReal, err := filepath.EvalSymlinks(cfg.VaultDir)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(vaultDirReal, targetAbs)
 	if err != nil {
 		return err
 	}
