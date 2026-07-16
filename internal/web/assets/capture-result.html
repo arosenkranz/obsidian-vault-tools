@@ -1,0 +1,7 @@
+{{define "capture-result.html"}}
+<div class="success">
+  Captured: {{.Rel}}
+  {{if .MOCLinked}}<br>Linked to [[{{.MOCLinked}}]]{{end}}
+  {{if .MOCWarning}}<br><span class="warning">{{.MOCWarning}}</span>{{end}}
+</div>
+{{end}}
