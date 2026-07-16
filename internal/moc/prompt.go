@@ -1,0 +1,63 @@
+// internal/moc/prompt.go
+package moc
+
+import "fmt"
+
+// promptTemplate ports moc_cleanup.py's PROMPT_TEMPLATE verbatim (row
+// #110). Backtick raw strings need no escaping for the literal "\n"
+// sequences the JSON example shows the LLM (Python's "\\n" in that
+// source is likewise the literal two-character sequence, not a real
+// newline — Go's backtick strings match that directly).
+const promptTemplate = `You are reorganizing a single Obsidian "Map of Content" (MOC) file. This is
+a hand-curated index of links, and your job is ONLY to tidy its structure —
+not to change what it indexes.
+
+MOC name: %s
+
+ALLOWED changes:
+- Move existing bullet entries under a more fitting existing "###" subheading
+  (e.g. group entries from the same source/site/topic together), or create a
+  new "###" subheading if none fits.
+- Fix an entry's title/link text if it is obviously garbled — e.g. a
+  slugified URL like "[[https example com foo-bar]]" should become a
+  readable title if one can be inferred from the URL or surrounding text.
+- Fix obvious formatting issues: inconsistent bullet markers, stray blank
+  lines, misplaced "---" separators.
+- Reorder subsections for readability (e.g. alphabetical, or grouped by
+  source) if it clearly improves scannability.
+
+FORBIDDEN changes (must not do these, no exceptions):
+- Must not delete any existing bullet, link, or line of content.
+- Must not invent new links, URLs, or entries that are not already present.
+- Must not alter the YAML frontmatter (the block between the two "---"
+  lines at the top of the file) in any way.
+- Must not rewrite free-text prose sections (e.g. "## Notes", "## Overview",
+  "> blockquote" descriptions) beyond fixing whitespace.
+- Must not change top-level "##" heading text or emoji, only reorganize what
+  is nested under them (and manage "###" subheadings within them).
+
+If you find two entries that look like duplicates (same URL, or same title
+under different phrasing), do NOT merge or delete either one — keep both and
+report them in "duplicates_flagged" instead, so a human can decide.
+
+Return ONLY a JSON object with this exact shape, no markdown fences, no
+commentary before or after:
+
+{
+  "new_content": "<the complete reorganized file content, including the\nunchanged frontmatter block, as a single string with literal \n newlines>",
+  "duplicates_flagged": ["<human-readable description of duplicate pair 1>", "..."],
+  "summary": "<one or two sentences describing what you changed and why>"
+}
+
+Here is the current file content:
+
+---
+%s
+---
+`
+
+// BuildPrompt assembles the moc_cleanup prompt for one MOC, mirroring
+// moc_cleanup.py's build_prompt (row #110).
+func BuildPrompt(mocContent, mocName string) string {
+	return fmt.Sprintf(promptTemplate, mocName, mocContent)
+}
