@@ -42,7 +42,7 @@ func newServeCmd() *cobra.Command {
 				VaultDir:  cfg.VaultDir,
 				Inbox:     cfg.Inbox,
 				Resources: cfg.Resources,
-				Bind:      bindFlag,
+				Bind:      ln.Addr().String(), // the resolved address (bindFlag may end in ":0"), so Host-header validation matches what clients actually dial
 			}, capture.NewHTTPTitleFetcher(), nil)
 			fmt.Fprintf(errw, "ov2 serve: listening on http://%s\n", ln.Addr())
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
