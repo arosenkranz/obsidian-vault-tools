@@ -1,0 +1,9 @@
+Convert this Obsidian markdown note into a complete, self-contained HTML file.
+Design guidance: clean, modern design with good typography and readable line lengths
+Rules: single file, inline all CSS and JS, no external dependencies.
+Return ONLY the HTML — no markdown, no code fences, no explanation.
+
+---
+# My Note
+
+Some content.
