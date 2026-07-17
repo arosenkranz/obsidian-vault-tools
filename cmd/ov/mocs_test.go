@@ -134,6 +134,45 @@ func TestMocsNewRefusesExisting(t *testing.T) {
 	}
 }
 
+// BUG(fixed): runMocsNew's printed vault-relative path must be clean
+// even when cfg.VaultDir itself sits behind a symlink (macOS /tmp ->
+// /private/tmp, iCloud Drive / CloudStorage vault paths are the same
+// class) — vault.ContainPath resolves symlinks internally and returns
+// an absolute path built from the RESOLVED root, so computing the
+// final relative path against the RAW, unresolved cfg.VaultDir
+// produces "../../private/..."-style garbage instead of a clean
+// "03-Resources/MOC <title>.md" (found via manual smoke testing; same
+// fix class as triage.Validate's PARA-root gate, phase 3 Task 4).
+// Deliberately bypasses newVaultFixture (which pre-resolves symlinks
+// on its own t.TempDir() as a workaround for this exact class of bug)
+// to exercise runMocsNew's OWN fix directly, independent of that test
+// helper's convenience resolution.
+func TestMocsNewCleanPathUnderSymlinkedVaultDir(t *testing.T) {
+	clearOVEnv(t)
+	rawVault := t.TempDir() // NOT EvalSymlinks-resolved on purpose
+	if err := os.MkdirAll(filepath.Join(rawVault, "03-Resources"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("vault_dir = \""+rawVault+"\"\nllm_cmd = \"true\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OV_CONFIG", cfgPath)
+
+	out, errs, err := runCmd(t, "mocs", "new", "Gardening")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, errs)
+	}
+	got := strings.TrimSpace(out)
+	want := "03-Resources/MOC Gardening.md"
+	if got != want {
+		t.Errorf("stdout = %q, want %q (must not contain traversal like ../../private/...)", got, want)
+	}
+	if resolved, _ := filepath.EvalSymlinks(rawVault); resolved == rawVault {
+		t.Skip("this test only proves the fix when t.TempDir() itself sits behind a symlink (true on macOS by default); on this platform the raw and resolved paths already matched, so the regression path was not actually exercised")
+	}
+}
+
 // CONTRACT(#66): mocs add inserts under "## Key Notes".
 func TestMocsAddExistingHeading(t *testing.T) {
 	vaultDir := newVaultFixture(t)

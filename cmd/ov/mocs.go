@@ -139,7 +139,20 @@ func runMocsNew(cfg *config.Config, title string, now time.Time) (string, error)
 	if err := vault.WriteNoteAtomic(targetAbs, []byte(content), ""); err != nil {
 		return "", err
 	}
-	rel, err := filepath.Rel(cfg.VaultDir, targetAbs)
+	// vault.ContainPath resolves symlinks on the root internally (e.g.
+	// macOS /tmp -> /private/tmp, iCloud Drive / CloudStorage vault
+	// paths) and returns targetAbs built from that RESOLVED root —
+	// computing Rel against the raw, unresolved cfg.VaultDir would
+	// otherwise print a "../../private/tmp/..."-style garbage path
+	// instead of a clean vault-relative one (same fix class as
+	// triage.Validate's PARA-root gate, phase 3 Task 4). The file
+	// itself is unaffected (targetAbs is already correct) — only the
+	// machine-readable stdout path (row #123 discipline) was wrong.
+	vaultDirReal, err := filepath.EvalSymlinks(cfg.VaultDir)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(vaultDirReal, targetAbs)
 	if err != nil {
 		return "", err
 	}
