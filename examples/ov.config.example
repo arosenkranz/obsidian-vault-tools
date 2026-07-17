@@ -34,3 +34,9 @@ OV_MODEL=""
 # tool permissions denied and reference it via --settings, or a shell
 # wrapper script that passes the equivalent flag for your installed
 # version — check `claude --help` for the current flag name.
+
+# Optional: `ov publish`/`ov unpublish` push/remove files on a docs
+# server over rsync/ssh. Uncomment and set if you use them.
+# OV_DOCS_HOST="docs.example.com"
+# OV_DOCS_PATH="/var/www/docs"
+# OV_DOCS_URL="https://docs.example.com"
