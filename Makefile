@@ -25,6 +25,7 @@ build:
 
 install: build
 	@mkdir -p $(BIN_DIR)
+	@rm -f $(BIN_DIR)/ov
 	@cp dist/ov $(BIN_DIR)/ov
 	@echo "✓ Installed $(BIN_DIR)/ov"
 	@$(MAKE) config
