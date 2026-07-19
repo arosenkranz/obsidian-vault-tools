@@ -138,7 +138,7 @@ fi
 
 echo
 echo "--- inbox ---"
-bash_inbox=$(run_bash inbox 2>/dev/null | tail -n +2 | strip_ansi | sed -E 's/^  . //; s/  \([0-9]+d old\)$//' | grep -v '^$' | sort)
+bash_inbox=$(run_bash inbox 2>/dev/null | tail -n +2 | strip_ansi | sed -E 's/^  . +//; s/  \([0-9]+d old\)$//' | grep -v '^$' | grep -v "Inbox is empty" | sort)
 go_inbox=$(run_go inbox 2>/dev/null | cut -f1 | sort)
 if [ "$bash_inbox" = "$go_inbox" ]; then
   ok "inbox item set identical"
