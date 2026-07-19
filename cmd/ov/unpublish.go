@@ -49,7 +49,7 @@ func newUnpublishCmd() *cobra.Command {
 	return cmd
 }
 
-// runUnpublish is the testable core of `ov2 unpublish`. Requires
+// runUnpublish is the testable core of `ov unpublish`. Requires
 // cfg.DocsHost, else error+exit 1 (matches publish's own exit-1
 // convention, not errExitCode2). Direct-args mode removes each basename
 // with NO confirmation (row #76, ported exactly). With no args, a plain

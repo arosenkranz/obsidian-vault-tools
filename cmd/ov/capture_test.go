@@ -177,10 +177,10 @@ func TestCaptureCLISmoke(t *testing.T) {
 
 func buildOV2(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "ov2")
+	bin := filepath.Join(t.TempDir(), "ov")
 	build := exec.Command("go", "build", "-o", bin, ".")
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build ov2: %v\n%s", err, out)
+		t.Fatalf("build ov: %v\n%s", err, out)
 	}
 	return bin
 }

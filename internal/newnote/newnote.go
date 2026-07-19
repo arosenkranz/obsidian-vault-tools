@@ -1,6 +1,6 @@
 // internal/newnote/newnote.go
 //
-// Package newnote renders `ov2 new`'s note templates. Pure content
+// Package newnote renders `ov new`'s note templates. Pure content
 // generation only (mirrors internal/vault.NewMOCSkeleton's
 // characterization) — folder resolution, slugification, containment,
 // and the atomic write all stay in cmd/ov/new.go, matching this

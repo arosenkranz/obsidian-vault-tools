@@ -39,7 +39,7 @@ func newRenderCmd() *cobra.Command {
 	return cmd
 }
 
-// runRender is the testable core of `ov2 render`. Three modes, matching
+// runRender is the testable core of `ov render`. Three modes, matching
 // render_html.py's own dispatch order (rows #117-120): a <file>
 // argument (resolved through vault.ContainPath — <file> IS meant to be
 // vault-relative, unlike publish's arbitrary local path) regenerates

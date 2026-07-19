@@ -61,7 +61,7 @@ func newCaptureCmd() *cobra.Command {
 	return cmd
 }
 
-// runCapture is the testable core of ov2 capture: resolve the body
+// runCapture is the testable core of ov capture: resolve the body
 // (positional wins over piped stdin, row #44), resolve the MOC (flag, or an
 // interactive picker gated on a real tty, row #136), and delegate to
 // capture.Capture. Writes exactly one line to out (the captured note's
@@ -79,7 +79,7 @@ func runCapture(cfg *config.Config, flags captureFlags, args []string, in io.Rea
 		body = string(b)
 	} else {
 		fmt.Fprintln(errw, "No content provided. Pass body as arg or pipe via stdin.")
-		fmt.Fprintln(errw, "Try: ov2 capture --help")
+		fmt.Fprintln(errw, "Try: ov capture --help")
 		return errors.New("no content provided")
 	}
 

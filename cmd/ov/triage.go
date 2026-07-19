@@ -33,7 +33,7 @@ type triageDeps struct {
 // runLLMTriage's two AGENTS.md-precondition checks. main.go recognizes it
 // and exits the process with code 2 instead of the default 1 (row #104:
 // this triage --llm mode intentionally diverges from the exit-1
-// convention used elsewhere in ov2, mirroring v1 triage_llm.py's own exit
+// convention used elsewhere in ov, mirroring v1 triage_llm.py's own exit
 // code for the binary it replaces — manual, non-llm triage keeps its
 // existing phase-2 exit-0-on-missing-inbox behavior unchanged, an
 // unrelated code path).
@@ -51,7 +51,7 @@ type llmTriageDeps struct {
 
 const llmTriageTimeout = 120 * time.Second
 
-// runLLMTriage is the testable core of `ov2 triage --llm`: for each inbox
+// runLLMTriage is the testable core of `ov triage --llm`: for each inbox
 // note (up to limit, 0 = unlimited), call triage.Propose, render a diff
 // via triage.Apply(..., dryRun=true) + tui.RenderDiff, and either show it
 // (dryRun) or drive the a/e/s/d/r/q approval loop (row #102). Missing
@@ -230,7 +230,7 @@ func newTriageCmd() *cobra.Command {
 				return runLLMTriage(cfg, bufio.NewReader(cmd.InOrStdin()), cmd.OutOrStdout(), cmd.ErrOrStderr(), deps, dryRun, limit)
 			}
 			if !isatty.IsTerminal(os.Stdin.Fd()) || !isatty.IsTerminal(os.Stdout.Fd()) {
-				return errors.New("ov2 triage requires an interactive terminal")
+				return errors.New("ov triage requires an interactive terminal")
 			}
 			deps := triageDeps{pickFolder: tui.RunFolderPicker, confirm: tui.Confirm}
 			return runTriage(cfg, bufio.NewReader(cmd.InOrStdin()), cmd.ErrOrStderr(), deps)
@@ -243,7 +243,7 @@ func newTriageCmd() *cobra.Command {
 	return cmd
 }
 
-// runTriage is the testable core of ov2 triage: for each inbox note, read
+// runTriage is the testable core of ov triage: for each inbox note, read
 // one key choice from in and act on it. deps.pickFolder/deps.confirm are
 // injected so tests never open a real tty (production wires them to the
 // bubbletea/huh implementations in internal/tui). Key map mirrors v1

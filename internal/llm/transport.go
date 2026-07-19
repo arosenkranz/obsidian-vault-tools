@@ -69,7 +69,7 @@ func (r *Runner) Run(ctx context.Context, prompt string) (string, error) {
 // never ran with the vault (or the test process's own CWD) as its
 // working directory, without parsing stdout for a marker.
 func (r *Runner) lastRunDir(ctx context.Context, prompt string) (string, error) {
-	scratch, err := os.MkdirTemp("", "ov2-llm-*")
+	scratch, err := os.MkdirTemp("", "ov-llm-*")
 	if err != nil {
 		return "", err
 	}
@@ -81,7 +81,7 @@ func (r *Runner) lastRunDir(ctx context.Context, prompt string) (string, error) 
 }
 
 func runOnce(ctx context.Context, cmdStr, model, prompt string) (string, error) {
-	scratch, err := os.MkdirTemp("", "ov2-llm-*")
+	scratch, err := os.MkdirTemp("", "ov-llm-*")
 	if err != nil {
 		return "", err
 	}

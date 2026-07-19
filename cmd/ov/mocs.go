@@ -114,7 +114,7 @@ func newMocsNewCmd() *cobra.Command {
 	return cmd
 }
 
-// runMocsNew is the testable core of `ov2 mocs new`: an empty title is an
+// runMocsNew is the testable core of `ov mocs new`: an empty title is an
 // error (row #64). The filename is built via a slugified title routed
 // through vault.ContainPath (row #153's traversal fix — v1 interpolated
 // the raw title unsanitized) and refused if a MOC already exists there
@@ -182,7 +182,7 @@ func newMocsAddCmd() *cobra.Command {
 	return cmd
 }
 
-// runMocsAdd is the testable core of `ov2 mocs add`: resolves mocName via
+// runMocsAdd is the testable core of `ov mocs add`: resolves mocName via
 // vault.FindMOCByName (row #33), sanitizes noteName (row #155 — free
 // text, never validated as a real note, matching v1's DECIDE), inserts
 // "- [[noteName]]" under "## Key Notes" or appends at EOF (row #66), and
@@ -246,7 +246,7 @@ func newMocsCleanupCmd() *cobra.Command {
 	return cmd
 }
 
-// runMocsCleanup is the testable core of `ov2 mocs cleanup`: name XOR
+// runMocsCleanup is the testable core of `ov mocs cleanup`: name XOR
 // --all, else exit 2 (row #114); resolves target(s) via
 // vault.FindMOCByName (single) or vault.MOCs (all, row #156) — no
 // targets resolved also exits 2 (row #113). For each target: read once

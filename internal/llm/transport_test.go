@@ -150,7 +150,7 @@ func TestRunUsesScratchCWDNeverCallerDir(t *testing.T) {
 	if cwd == wd {
 		t.Errorf("subprocess CWD = %q, must not equal the test process's own CWD %q", cwd, wd)
 	}
-	if !strings.Contains(cwd, "ov2-llm-") {
-		t.Errorf("subprocess CWD = %q, want an ov2-llm-* scratch dir", cwd)
+	if !strings.Contains(cwd, "ov-llm-") {
+		t.Errorf("subprocess CWD = %q, want an ov-llm-* scratch dir", cwd)
 	}
 }

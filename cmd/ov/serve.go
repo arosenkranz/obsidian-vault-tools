@@ -20,7 +20,7 @@ func newServeCmd() *cobra.Command {
 	var allowNonlocal bool
 	cmd := &cobra.Command{
 		Use:   "serve",
-		Short: "Run the ov2 web server (capture form + inbox + LLM triage)",
+		Short: "Run the ov web server (capture form + inbox + LLM triage)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := resolveConfig(vaultFlag)
@@ -55,7 +55,7 @@ func newServeCmd() *cobra.Command {
 				AgentsMD:  string(agentsMD),
 				Bind:      ln.Addr().String(), // the resolved address (bindFlag may end in ":0"), so Host-header validation matches what clients actually dial
 			}, capture.NewHTTPTitleFetcher(), runner, nil)
-			fmt.Fprintf(errw, "ov2 serve: listening on http://%s\n", ln.Addr())
+			fmt.Fprintf(errw, "ov serve: listening on http://%s\n", ln.Addr())
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			return srv.Serve(ctx, ln)
