@@ -19,7 +19,7 @@ type Pusher interface {
 // RsyncPusher shells out to the real `rsync` binary via argv-exec (row
 // #75). Bare "rsync"/"ssh" resolution via the process's own PATH
 // (implicit exec.Command lookup, not a pre-resolved absolute path):
-// unlike internal/llm.Runner (row #144, hardened for ov2 serve's
+// unlike internal/llm.Runner (row #144, hardened for ov serve's
 // launchd context with a minimal PATH), publish/unpublish are CLI-only
 // per the design's "Web v1 surface" pin — they only ever run from an
 // interactive terminal session with a normal PATH.

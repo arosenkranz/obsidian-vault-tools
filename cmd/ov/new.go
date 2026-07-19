@@ -45,7 +45,7 @@ func newNewCmd() *cobra.Command {
 	return cmd
 }
 
-// runNew is the testable core of `ov2 new`: an empty title is an error
+// runNew is the testable core of `ov new`: an empty title is an error
 // (row #59). folderRel/content are resolved per type (row #59's fixed
 // destinations: Project -> Projects root, Meeting -> Areas/Work,
 // Learning -> Areas/Learning, General -> Inbox); the filename is built

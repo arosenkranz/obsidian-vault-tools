@@ -1,6 +1,7 @@
-# Example config for the `ov` CLI.
-# Copy to ~/.config/ov/config and edit OV_VAULT_DIR for your machine.
-# `make install` does this for you on first run.
+# Example of the LEGACY (pre-Go-rewrite) bash-format config, kept only as
+# a reference for `ov config migrate --from <this-shape>`. New installs
+# should NOT copy this file — `ov init` writes a fresh TOML config at
+# ~/.config/ov/config.toml directly; see docs/config.md.
 
 # REQUIRED: absolute path to your Obsidian vault.
 OV_VAULT_DIR="$HOME/Documents/main-vault"
@@ -24,9 +25,9 @@ OV_MODEL=""
 
 # SECURITY: triage --llm interpolates note bodies and previously-fetched
 # URL titles into the LLM prompt. Those are attacker-influenced (a
-# malicious clipped page or a crafted inbox note). ov2 always runs the LLM
+# malicious clipped page or a crafted inbox note). ov always runs the LLM
 # subprocess with its CWD set to an empty scratch directory (never your
-# vault) — but tool access is provider-specific and ov2 cannot inject
+# vault) — but tool access is provider-specific and ov cannot inject
 # provider-specific flags into OV_LLM_CMD without breaking it for other
 # providers. If your provider supports disabling tool/file access for a
 # single invocation, point OV_LLM_CMD at a wrapper or settings profile

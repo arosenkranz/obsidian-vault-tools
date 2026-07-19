@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- bash, Python 3.9+
+- Go 1.25+ (to build).
 - An LLM CLI on PATH for `ov triage --llm`. Either:
   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — `claude --print`
   - [pi](https://github.com/anthropics/pi) — `pi --print -nc -nt --mode json` (recommended for triage: native JSON output, no auto-discovery side effects)
@@ -16,19 +16,21 @@ cd ~/workspace/obsidian-vault-tools
 make install
 ```
 
-`make install` does two things:
-1. Symlinks `bin/vault.sh` → `~/.local/bin/ov`
-2. Copies `examples/ov.config.example` → `~/.config/ov/config` (only if not present)
+`make install` does three things:
+1. Builds `dist/ov` (`go build ./cmd/ov`)
+2. Copies it to `~/.local/bin/ov`
+3. Creates `~/.config/ov/config.toml` from `ov init`'s built-in template if not already present
 
 Edit the config:
 
 ```bash
-$EDITOR ~/.config/ov/config
+$EDITOR ~/.config/ov/config.toml
 ```
 
-The only required value is `OV_VAULT_DIR`. Smoke-test:
+The only required value is `vault_dir`. Smoke-test:
 
 ```bash
+ov doctor
 ov inbox
 ov capture "first capture from this machine"
 ov inbox    # should now show the new note
@@ -42,8 +44,16 @@ If your vault is already synced (Obsidian Sync, iCloud, Dropbox, Syncthing, etc.
 git clone <this repo> ~/workspace/obsidian-vault-tools
 cd ~/workspace/obsidian-vault-tools
 make install
-$EDITOR ~/.config/ov/config    # set OV_VAULT_DIR for this machine's vault path
-ov inbox                       # smoke test
+$EDITOR ~/.config/ov/config.toml    # set vault_dir for this machine's vault path
+ov doctor                           # smoke test
+```
+
+## Migrating an old bash-format config
+
+If you have a config from before the Go rewrite (`OV_VAULT_DIR="..."` style, at `~/.config/ov/config`), convert it:
+
+```bash
+ov config migrate --from ~/.config/ov/config > ~/.config/ov/config.toml
 ```
 
 ## Fresh vault from scratch (no existing notes)
@@ -57,14 +67,14 @@ cp -r templates/99-Meta ~/Documents/my-new-vault/
 mkdir -p ~/Documents/my-new-vault/{00-Inbox,01-Projects,02-Areas,03-Resources,04-Archive}
 ```
 
-Then point `OV_VAULT_DIR` at it.
+Then point `vault_dir` at it.
 
 ## Updating
 
 ```bash
 cd ~/workspace/obsidian-vault-tools
 git pull
-# No need to re-run `make install` unless the Makefile or config example changed.
+make install    # rebuilds and reinstalls the binary
 ```
 
 ## Uninstall

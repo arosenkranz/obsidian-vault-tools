@@ -68,7 +68,7 @@ func newPublishCmd() *cobra.Command {
 	return cmd
 }
 
-// runPublish is the testable core of `ov2 publish`. Requires
+// runPublish is the testable core of `ov publish`. Requires
 // cfg.DocsHost, else error+exit 1 — NOT exit 2 (row #68, matching v1's
 // own exit code for this command, distinct from triage/mocs-cleanup's
 // errExitCode2 sentinel). A .md file without --llm refuses with a hint
@@ -100,7 +100,7 @@ func runPublish(cfg *config.Config, file string, useLLM bool, desc string, errw 
 	publishFile := file
 
 	if ext == ".md" && !useLLM {
-		return fmt.Errorf("%s is a markdown file — use --llm to convert it to HTML first: ov2 publish %q --llm", file, file)
+		return fmt.Errorf("%s is a markdown file — use --llm to convert it to HTML first: ov publish %q --llm", file, file)
 	}
 	if useLLM && ext != ".md" {
 		fmt.Fprintf(errw, "⚠ --llm ignored: file is already %s, publishing as-is\n", strings.TrimPrefix(ext, "."))

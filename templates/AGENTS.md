@@ -217,7 +217,7 @@ When uncertain, propose and ask. The user's default mode is **suggest-only**.
 
 ## 9. Tools available to agents
 
-The user has a CLI at `~/.local/bin/ov` (source: `99-Meta/vault.sh`):
+The user has a CLI at `~/.local/bin/ov` (source: this repo's `cmd/ov/`, built with `go build`):
 
 ```
 ov inbox           # list inbox with ages

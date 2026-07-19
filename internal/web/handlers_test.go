@@ -28,7 +28,7 @@ func TestHandleInboxEmpty(t *testing.T) {
 }
 
 // DECIDE(#138): the web inbox list renders through vault.ListInbox, the
-// same query the CLI's `ov2 inbox` uses.
+// same query the CLI's `ov inbox` uses.
 func TestHandleInboxListsNotes(t *testing.T) {
 	vaultDir, cfg := newTestVault(t)
 	if err := os.WriteFile(filepath.Join(vaultDir, "00-Inbox", "2026-07-15 0800 Foo.md"), []byte("# Foo\n"), 0o644); err != nil {

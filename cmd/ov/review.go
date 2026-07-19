@@ -25,7 +25,7 @@ func newReviewCmd() *cobra.Command {
 			now := time.Now()
 			fmt.Fprintln(errw, "Weekly Review")
 
-			// Inbox count — unified with `ov2 inbox` (top-level *.md, row #124).
+			// Inbox count — unified with `ov inbox` (top-level *.md, row #124).
 			inbox, err := vault.ListInbox(cfg.VaultDir, cfg.Inbox)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
@@ -66,8 +66,8 @@ func newReviewCmd() *cobra.Command {
 
 			// Hints are pure decoration → stderr (row #123).
 			fmt.Fprintln(errw, "Next steps:")
-			fmt.Fprintln(errw, "  - Process inbox with 'ov2 triage'")
-			fmt.Fprintln(errw, "  - Check for stale notes with 'ov2 stale'")
+			fmt.Fprintln(errw, "  - Process inbox with 'ov triage'")
+			fmt.Fprintln(errw, "  - Check for stale notes with 'ov stale'")
 			fmt.Fprintln(errw, "  - Update brag document if work-related wins")
 			return nil
 		},
