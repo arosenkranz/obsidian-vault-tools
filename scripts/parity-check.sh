@@ -55,6 +55,13 @@ if [ ! -f "$SOURCE_VAULT/AGENTS.md" ]; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BASH_BIN="$REPO_ROOT/bin/vault.sh"
+if [ ! -f "$BASH_BIN" ]; then
+  echo "bin/vault.sh was retired at cutover (phase 6) — there is no bash oracle left to diff against."
+  echo "This script is kept as a historical record of the v1->v2 parity check; see README.md's History section."
+  exit 0
+fi
+
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/ov-parity.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -72,7 +79,6 @@ if ! go build -o "$GO_BIN" "$REPO_ROOT/cmd/ov"; then
   echo "FATAL: go build failed" >&2
   exit 1
 fi
-BASH_BIN="$REPO_ROOT/bin/vault.sh"
 
 echo "== Seeding two isolated vault copies from $SOURCE_VAULT =="
 BASH_VAULT="$WORK/bash-vault"
