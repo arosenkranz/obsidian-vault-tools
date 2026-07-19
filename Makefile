@@ -14,6 +14,7 @@ help:
 	@echo "  test       Run the pytest suite (tests/)"
 	@echo "  build      Build the Go binary to dist/ov2"
 	@echo "  gotest     Run the Go test suite"
+	@echo "  parity     Run scripts/parity-check.sh (SOURCE=/path/to/vault required)"
 	@echo "  uninstall  unlink + leave config in place"
 	@echo ""
 	@echo "Variables:"
@@ -63,3 +64,7 @@ build:
 
 gotest:
 	go test ./...
+
+parity:
+	@test -n "$(SOURCE)" || (echo "usage: make parity SOURCE=/path/to/vault [ARGS='--with-llm']" && exit 2)
+	./scripts/parity-check.sh --source "$(SOURCE)" $(ARGS)
